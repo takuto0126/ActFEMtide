@@ -289,7 +289,7 @@ CALL READMSH2(infile,h_mesh)
 
 return
 end subroutine
-!---------------------------------------------  allocate_mesh
+!###############################################  allocatemeshspherical
 subroutine allocatemeshspherical(h_mesh)
 implicit none
 type(mesh),intent(inout) :: h_mesh
@@ -300,7 +300,7 @@ allocate (h_mesh%xyzspherical(3,h_mesh%node))
 
 return
 end subroutine
-!---------------------------------------------  allocate_mesh
+!###############################################allocate_mesh
 subroutine allocate_mesh(h_mesh)
 implicit none
 
@@ -311,13 +311,14 @@ allocate (h_mesh%xyz(3,h_mesh%node))
 !# node composing elements
 allocate (h_mesh%n4(h_mesh%ntet,4))
 allocate (h_mesh%n3(h_mesh%ntri,3))
-if (h_mesh%nlin .ne.0 ) allocate (h_mesh%n2(h_mesh%nlin,2))
+write(*,*) "h_mesh%nlin =", h_mesh%nlin
+allocate (h_mesh%n2(h_mesh%nlin,2))
 allocate (h_mesh%n1(h_mesh%npoi,1))
 
 !# flags
 allocate (h_mesh%n4flag(h_mesh%ntet,2))
 allocate (h_mesh%n3flag(h_mesh%ntri,2))
-if (h_mesh%nlin .ne.0 ) allocate (h_mesh%n2flag(h_mesh%nlin,2))
+allocate (h_mesh%n2flag(h_mesh%nlin,2))
 allocate (h_mesh%n1flag(h_mesh%npoi,2))
 
 !# model
@@ -368,10 +369,10 @@ h_mesh%ntet=ntet
 h_mesh%ntri=ntri
 h_mesh%nlin=nlin
 h_mesh%npoi=npoi
-!write(*,*) "# of Point elements is",npoi
-!write(*,*) "# of Line elements is",nlin
-!write(*,*) "# of Triangle elements is",ntri
-!write(*,*) "# of Tetrahedron elements is",ntet
+write(*,*) "# of Point elements is",npoi
+write(*,*) "# of Line elements is",nlin
+write(*,*) "# of Triangle elements is",ntri
+write(*,*) "# of Tetrahedron elements is",ntet
 write(*,*) "### COUNT ", mshfile(1:len_trim(mshfile))," END!! ###"
 return
 end subroutine mshcount1

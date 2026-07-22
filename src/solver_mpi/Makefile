@@ -29,6 +29,6 @@ $(target2) : $(objs2)
 	$(FC) -c $(OPT0) $< -o $@
 
 clean:
-	rm -f *.o    ../src_mesh/*.o
-	rm -f *.mod  ../src_mesh/*.mod
-	rm -f *.exe  ../src_mesh/*.exe
+	rm -f *.o    ../solver/*.o ../common_mpi/*.o ../src_tide/*.o ../src_mesh/*.o
+	rm -f *.mod  ../solver/*.mod ../common_mpi/*.mod ../src_tide/*.mod ../src_mesh/*.mod
+	rm -f *.exe  ../solver/*.exe ../common_mpi/*.exe ../src_tide/*.exe ../src_mesh/*.exe
