@@ -1,0 +1,28 @@
+# Latest modification is on Mar 23, 2017
+# Coded on August 15, 2015 by T. MINAMI
+
+FC=mpiifort    # for EIC
+VPATH= ../common ../solver  ../src_inv/ ../common_mpi /opt/intel/mkl/include /opt/intel/compilers_and_libraries/linux/mpi/include64 /opt/intel/compilers_and_libraries_2018.5.274/linux/mkl/include
+
+# for avl
+OPT0= -O3 -fpe0 -check bounds -traceback -g  -mkl=parallel -lmpi -I/opt/intel/compilers_and_libraries/linux/mpi/include64 -I/opt/intel/compilers_and_libraries_2018.5.274/linux/mkl/include -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core -liomp5 -lpthread -ldl
+
+#2016.03.03 solver with many modules
+target1=ebfem_inv_ap.exe
+objs1= m_caltime.o m_constants.o  m_param_ana.o m_outerinnerproduct.o m_matrix.o m_fem_util.o m_fem_edge_util.o m_line_type.o  m_param.o m_obs_type.o m_outresp.o m_mesh_type.o  m_triangle.o m_face_type.o m_modelpart.o m_param_apinv.o m_iccg_var_takuto.o solvePARDISOinv.o m_solveCM_ap.o solvebeta.o sort_index.o m_jacobian_ap.o forward_apinv.o m_freq_mpi.o m_shareformpi_ap.o m_spectral.o m_modelroughness.o n_inv_ap.o
+
+$(target1) : $(objs1)
+	$(FC) $(OPT0) $(objs1) -o $(target1)
+
+
+# rules
+.SUFFIXES : .f90 .o
+.f90.o:
+	$(FC) -c $(OPT0) $< -o $@
+.f.o:
+	$(FC) -c $< -o $@
+
+clean:
+	rm -f *.o    ../src_inv/*.o  ../src_mesh/*.o ../solver/*.o
+	rm -f *.mod ../src_inv/*.mod ../src_mesh/*.mod ../solver/*.mod
+	rm -f *.exe ../src_inv/*.exe ../src_mesh/*.exe ../solver/*.exe 

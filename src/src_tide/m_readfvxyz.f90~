@@ -1,0 +1,102 @@
+module readFvxyz
+  
+implicit none
+contains
+  !##################################################
+
+  subroutine readfxyz(h_ocean,fxyz,h_mesh,fxyzfile)
+use mesh_type
+
+implicit none
+
+type(mesh),intent(in)::h_ocean,h_mesh
+real(8)::lon,lat,alt
+real(8)::fxyz(3,h_mesh%node)
+character(70)::fxyzfile
+  !character(70)::oceanmeshfile
+ 
+  integer(8)::i
+
+
+  !oceanmeshfile="ocean.msh"
+  !CALL READMESH_TOTAL(h_ocean,oceanmeshfile)
+
+
+
+ ! fxyzfile="../src/src_tide/fxyz_mesh"
+
+
+
+
+    open(10,file=fxyzfile)
+
+    do i=1,h_ocean%node
+       
+       read(10,*)lat,lon,alt,fxyz(1,i),fxyz(2,i),fxyz(3,i)
+
+    end do
+
+do i=h_ocean%node+1,h_mesh%node
+fxyz(1:3,i)=0
+end do
+
+
+close(10)
+    return
+  end subroutine readfxyz
+
+  !##################################################
+
+  subroutine readvxyz(h_ocean,vxyz,h_mesh,vxyzfile)
+use mesh_type
+
+implicit none
+
+type(mesh),intent(in)::h_ocean,h_mesh
+real(8)::lon,lat,alt
+  complex(8)::vxyz(3,h_mesh%node)
+  character(70)::vxyzfile!,oceanmeshfile
+  !character(70)::oceanmeshfile
+integer(8)::i
+
+  !oceanmeshfile="ocean.msh"
+!CALL READMESH_TOTAL(h_ocean,oceanmeshfile)
+
+
+!vxyzfile="../src/src_tide/vxyz_mesh"
+
+   open(11,file=vxyzfile)
+!do i=1,3
+!   read(11,*)
+!end do
+
+
+
+    do i=1,h_ocean%node
+
+       read(11,*)lat,lon,alt,vxyz(1,i),vxyz(2,i)
+
+       vxyz(3,i)=(0,0)
+
+    end do
+
+!do i=h_ocean%node+1,h_mesh%node
+!vxyz(1:3,i)=(0,0)
+!end do
+
+    close(11)
+
+
+return
+  end subroutine readvxyz
+
+  !###################################################
+
+end module readfvxyz
+
+
+
+  
+
+    
+  
