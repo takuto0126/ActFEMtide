@@ -1,0 +1,4 @@
+DATA/Model_tpxo9_atlas_v2 ! 
+DATA/Model_Hawaii         ! Local area Model name
+ 16  28                   ! Lat limits (degrees N)
+185 208                   ! Lon limits (degrees E, range -180 +360)

@@ -311,13 +311,13 @@ allocate (h_mesh%xyz(3,h_mesh%node))
 !# node composing elements
 allocate (h_mesh%n4(h_mesh%ntet,4))
 allocate (h_mesh%n3(h_mesh%ntri,3))
-allocate (h_mesh%n2(h_mesh%nlin,2))
+if (h_mesh%nlin .ne.0 ) allocate (h_mesh%n2(h_mesh%nlin,2))
 allocate (h_mesh%n1(h_mesh%npoi,1))
 
 !# flags
 allocate (h_mesh%n4flag(h_mesh%ntet,2))
 allocate (h_mesh%n3flag(h_mesh%ntri,2))
-allocate (h_mesh%n2flag(h_mesh%nlin,2))
+if (h_mesh%nlin .ne.0 ) allocate (h_mesh%n2flag(h_mesh%nlin,2))
 allocate (h_mesh%n1flag(h_mesh%npoi,2))
 
 !# model

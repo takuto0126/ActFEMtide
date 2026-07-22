@@ -1,0 +1,189 @@
+ ip=           0 np=           2
+ 
+ <Please input the forward parameter file>
+ ip=           1 np=           2
+ file is tide_fwd.ctl
+ ### readcontrolfile END!! ###
+ 
+ <input 0 for no topo, 1 for topofiles (itopoflag)>
+ itopoflag =  1
+ 
+ <Please enter global meshfile>
+ global mesh file : ../mesh/em3d.msh
+ 2dz    mesh file : ../mesh/polygonz.msh
+ line info   file : ../mesh/lineinfo.dat
+ ocean meshfile : ../mesh/ocean.msh
+ mesh ctl file  : ../mesh/mesh.ctl
+ vxyz file : ../fvxyz/vxyz_mesh
+ fxyz file : ../fvxyz/fxyz_mesh
+ output folder    : ./result/
+header2d          : nakadake2d
+header3d          : nakadake3d
+ # of frequency :   1
+   0.0000 [Hz]
+ 
+ < input xbound and ybound >
+ xbound(2)=   -200.0000000
+ xbound(3)=    200.0000000
+ ybound(2)=   -200.0000000
+ ybound(3)=    200.0000000
+ 
+ < input meshinfo >
+ lenout      =    100.0000000
+ upzin       =    500.0000000
+ downzin     =   -500.0000000
+ zmax        =   1000.0000000
+ zmin        =  -1000.0000000
+ sizein      =      0.1000000
+ sizebo      =      2.0000000
+ sigma_obs   =      0.4000000
+ A_obs       =      0.0100000
+ dlen_source =      0.1000000
+ sigma_src   =      0.3000000
+ A_src       =      0.0050000
+ 
+ xbound =   -300.0000000   -200.0000000    200.0000000    300.0000000
+ ybound =   -300.0000000   -200.0000000    200.0000000    300.0000000
+ zbound =  -1000.0000000   -500.0000000    500.0000000   1000.0000000
+ 
+ # of observatories :  14
+ lonorigin =   130.500000000000     
+ latorigin =   30.5000000000000     
+ 
+ lon lat >    -13.5765323     16.6797631 [km]
+ lon lat >    -30.3435977     37.8074630 [km]
+ lon lat >      4.7905901     18.5256569 [km]
+ lon lat >    -17.7251833     38.9194472 [km]
+ lon lat >    -20.7624175     64.8620388 [km]
+ lon lat >      3.1905330     57.4451041 [km]
+ lon lat >    -39.9247778     42.6223547 [km]
+ lon lat >    -39.9247778     23.9076605 [km]
+ lon lat >    -39.6085989    -13.5328478 [km]
+ lon lat >    -84.1227621     65.2845928 [km]
+ lon lat >    -75.2793327     61.5038465 [km]
+ lon lat >    -64.4813427     55.9328056 [km]
+ lon lat >    -50.2724524     48.1600360 [km]
+ lon lat >     16.6999971     13.6329264 [km]
+ 
+ < input ixyflag: 0 for nothing, 1 for nx ny plan view, 2:ntrik >
+ ixyflag =  1
+ xyfilehead = 
+ bxyz_xy2D                                                             
+ nx,ny =         200         200
+ ki23dfile = ../mesh/ki23dptr.dat
+ 
+ < input # of source wires > 
+ # of source wires (nsource) =  1
+ source name: S1                                                                    
+ Electric source current :   0.000000     [A]
+ sigma_air =  0.1000000E-07 [S/m]
+ cond file is
+ ../structure/cond_test.msh                                            
+ condfile : 
+ ../structure/cond_test.msh                                            
+ g_cond%nphys2 =       96299
+ ### READCOND  END!! ###
+ ### READ FORWAR PARAM END!! ###
+ input # of header lines
+ # of header is           3
+ input filename of topgraphyfile (lon[deg],lat[deg],alt[m])
+ ../topo/etopo_kikai-l.xyz                         
+ input wlon,elon,slat,nlat [deg] line by line
+ input zmin, zmax [km] (upwardpositive)
+ lonorigin=   130.000000000000     
+ latorigin=   30.5000000000000     
+ input sizein [resolution [km] in focus area]
+ input sizebo [resolution [km] at calculation boundary]
+ input sizecoastratio [resolution ratio to sizein at coastline]
+ input lenout [ditance [km] from the edge of focus area to boundary]
+ input nobs
+ input observatory name in less than 6 characters
+ input observatory lon [deg], lat[deg], altitude [m]
+ input observatory resolution A [km] and sigma [km]
+ input iflag_extrude: 0 for nothing, 1 for vertical resolution less than horizon
+ tal [km]
+ input nlayer_max and depth_nlayer (1:nlayer_max-1)
+ input header
+ input upzin, downzin, sizein3d
+ ### COUNT ../mesh/em3d.msh END!! ###
+ ===< ../mesh/em3d.msh >===
+ # of nodes         (node) :     45296
+ # of elements      (nele) :    278518
+ # of Point       elements :     10657
+ # of Line        elements :         0
+ # of Triangle    elements :         0
+ # of Tetrahedron elements :    267861
+ # of Traiangle group1     :         0
+ ---
+ # of Tetrahedron group    1 =      85412
+ # of Tetrahedron group    2 =      98302
+ # of Tetrahedron group    3 =      84147
+ ==========================
+ ### READ  ../mesh/em3d.msh END!! ###
+ 
+ ### COUNT ../mesh/polygonz.msh END!! ###
+ ===< ../mesh/polygonz.msh >===
+ # of nodes         (node) :     10657
+ # of elements      (nele) :     21822
+ # of Point       elements :         0
+ # of Line        elements :         0
+ # of Triangle    elements :         0
+ # of Tetrahedron elements :         0
+ # of Traiangle group1     :     20812
+ ---
+ # of Tetrahedron group    1 =          0
+ ==============================
+ ### READ  ../mesh/polygonz.msh END!! ###
+ 
+ ### COUNT ../mesh/ocean.msh END!! ###
+ ===< ../mesh/ocean.msh >===
+ # of nodes         (node) :     27110
+ # of elements      (nele) :    108959
+ # of Point       elements :     10657
+ # of Line        elements :         0
+ # of Triangle    elements :         0
+ # of Tetrahedron elements :     98302
+ # of Traiangle group1     :         0
+ ---
+ # of Tetrahedron group    1 =      98302
+ ===========================
+ ### READ  ../mesh/ocean.msh END!! ###
+ 
+ ### COUNT ../mesh/polygonki.msh END!! ###
+forrtl: severe (174): SIGSEGV, segmentation fault occurred
+Image              PC                Routine            Line        Source             
+ebfem_bxyz_mpi.ex  000000000049E90A  Unknown               Unknown  Unknown
+libpthread-2.31.s  00007F454DB1D420  Unknown               Unknown  Unknown
+libiomp5.so        00007F454F8890C1  Unknown               Unknown  Unknown
+libiomp5.so        00007F454F88A373  Unknown               Unknown  Unknown
+ebfem_bxyz_mpi.ex  00000000004CBC21  Unknown               Unknown  Unknown
+ebfem_bxyz_mpi.ex  00000000004487BE  mesh_type_mp_read         314  m_mesh_type.f90
+ebfem_bxyz_mpi.ex  000000000046FDD7  MAIN__                     70  n_ebfem_bxyz_mpi.f90
+ebfem_bxyz_mpi.ex  0000000000404962  Unknown               Unknown  Unknown
+libc-2.31.so       00007F454D7EC083  __libc_start_main     Unknown  Unknown
+ebfem_bxyz_mpi.ex  000000000040486E  Unknown               Unknown  Unknown
+forrtl: severe (174): SIGSEGV, segmentation fault occurred
+Image              PC                Routine            Line        Source             
+ebfem_bxyz_mpi.ex  000000000049E9AE  Unknown               Unknown  Unknown
+libpthread-2.31.s  00007F454DB1D420  Unknown               Unknown  Unknown
+libiomp5.so        00007F454F801E8B  Unknown               Unknown  Unknown
+ld-2.31.so         00007F455852CF6B  Unknown               Unknown  Unknown
+libc-2.31.so       00007F454D80E8A7  Unknown               Unknown  Unknown
+libc-2.31.so       00007F454D80EA60  on_exit               Unknown  Unknown
+ebfem_bxyz_mpi.ex  0000000000495B9B  Unknown               Unknown  Unknown
+ebfem_bxyz_mpi.ex  000000000049E90A  Unknown               Unknown  Unknown
+libpthread-2.31.s  00007F454DB1D420  Unknown               Unknown  Unknown
+libiomp5.so        00007F454F8890C1  Unknown               Unknown  Unknown
+libiomp5.so        00007F454F88A373  Unknown               Unknown  Unknown
+ebfem_bxyz_mpi.ex  00000000004CBC21  Unknown               Unknown  Unknown
+ebfem_bxyz_mpi.ex  00000000004487BE  mesh_type_mp_read         314  m_mesh_type.f90
+ebfem_bxyz_mpi.ex  000000000046FDD7  MAIN__                     70  n_ebfem_bxyz_mpi.f90
+ebfem_bxyz_mpi.ex  0000000000404962  Unknown               Unknown  Unknown
+libc-2.31.so       00007F454D7EC083  __libc_start_main     Unknown  Unknown
+ebfem_bxyz_mpi.ex  000000000040486E  Unknown               Unknown  Unknown
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 1 PID 1056160 RUNNING AT triton
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================

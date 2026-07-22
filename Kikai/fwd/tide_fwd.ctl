@@ -3,15 +3,15 @@
 ##-----10!-------20!
 itopofile 0 or 1   !1
 # of topofile      !1
-topofile           !../topo/W170E220S55N15_1min_sort.xyz
+topofile           !../topo/etopo_kikai-l.xyz
 lon lat shift      !0.0         0.0
-mesh file          !/home/nonoyama/tide/Kikai/mesh_light/em3d.msh
-2d triangle z file !/home/nonoyama/tide/Kikai/mesh_light/polygonz.msh
-local line file    !/home/nonoyama/tide/Kikai/mesh_light/lineinfo.dat
-Ocean mesh file.   !/home/nonoyama/tide/Kikai/mesh_light/ocean.msh
-mesh ctl file      !/home/nonoyama/tide/Kikai/mesh_light/mesh_kikai.ctl
-Vxyzfile           !./vxyz_mesh
-Fxyzfile           !./fxyz_mesh
+mesh file          !../mesh/em3d.msh
+2d triangle z file !../mesh/polygonz.msh
+local line file    !../mesh/lineinfo.dat
+Ocean mesh file.   !../mesh/ocean.msh
+mesh ctl file      !../mesh/mesh.ctl
+Vxyzfile           !../fvxyz/vxyz_mesh
+Fxyzfile           !../fvxyz/fxyz_mesh
 output folder      !./result/
 header2d  (a50)    !nakadake2d
 header3d  (a50)    !nakadake3d
@@ -65,7 +65,12 @@ lonlatorigin       !130.500000     30.500000
 12  xyz            !129.9753   30.9331  -0.001
 12  Name           !P18
 12  xyz            !130.6743   30.6226  -0.001
-ixyflg 0:no,1:surfv!0
+0:no,1:nxny,2:ntrik!1
+file head          !bxyz_xy2D
+nx, ny             !200        200
+1:same z,2:seafloor!2
+ki23dfile          !../mesh/polygonki.msh
+nx,ny->ki23dptr fl !../mesh/ki23dptr.dat
 # of sources       !1
 Source Name        !S1
 source start point !189.354722   -24.33944  -0.001
@@ -75,5 +80,5 @@ sigma_air    [S/m] !1.e-8
 condflag 0:home,1: !1
 ##nvolume            !1
 ##cond               !0.01
-condfile           !./cond_test.msh
+condfile           !../structure/cond_test.msh
 
