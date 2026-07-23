@@ -2,3 +2,6 @@
 *.geo
 *.msh
 *.pos
+*.o
+*.mod
+*.exe

@@ -6,6 +6,8 @@ head="polygon"
 sdir="../../tmtgem/mesh"
 ctl="mesh.ctl"
 
+OPT=-setnumber General.RandomSeed 12345 # 2026.07.23 for the same mesh generation, random seed is fixed
+
 # [0] coastline.exe
 cd $sdir
 make clean
@@ -21,7 +23,7 @@ cd -
  ${sdir}/coastline.exe < ${ctl}
 
 #[2]## gmsh polygonki.geo
-gmsh ${head}ki.geo -2 -format msh2 -bgm bgmesh.pos
+gmsh ${head}ki.geo $OPT -2 -format msh2 -bgm bgmesh.pos
 #gmsh ${head}ki.msh  >& /dev/null &
 
 #[3]## mshki2ocean.f90, to extract horizontal ocean mesh
@@ -36,8 +38,8 @@ ${sdir}/extrude.exe < ${ctl}
 #[5]## mk3dgeo.f90
 ${sdir}/mk3dgeo.exe < ${ctl}
 
-gmsh pre3d.geo -3 -format msh2
-#gmsh pre3d.geo -3 -bgm bgmesh3d.pos
+gmsh pre3d.geo $OPT -3 -format msh2
+#gmsh pre3d.geo $OPT -3 -bgm bgmesh3d.pos
 
 #[6]## combine3d.f90
 ${sdir}/combine3d.exe < ${ctl}

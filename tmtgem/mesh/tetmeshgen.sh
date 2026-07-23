@@ -3,6 +3,8 @@
 head="polygon"
 ctl=mesh.ctl
 
+OPT=-setnumber General.RandomSeed 12345
+
 # [0] coastline.exe
 cd ../src
 make clean
@@ -14,7 +16,7 @@ cd -
 exit
 
 #[2]## gmsh polygonki.geo
-gmsh ${head}ki.geo -2 -bgm bgmesh.pos
+gmsh ${head}ki.geo $OPT -2 -bgm bgmesh.pos
 gmsh ${head}ki.msh  >& /dev/null &
 
 #[3]## mshki2ocean.f90, to extract horizontal ocean mesh
@@ -28,7 +30,7 @@ gmsh ocean.msh  >& /dev/null &
 #[5]## mk3dgeo.f90
 ../src/mk3dgeo.exe < $ctl
 gmsh pre3d.geo >& /dev/null &
-gmsh pre3d.geo -3 -bgm -bgmesh3d.pos #-optimize
+gmsh pre3d.geo $OPT -3 -bgm -bgmesh3d.pos #-optimize
 
 #[6]## combine3d.f90
 ../src/combine3d.exe < $ctl
