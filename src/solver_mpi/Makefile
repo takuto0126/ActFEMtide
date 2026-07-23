@@ -5,8 +5,8 @@ FC=mpiifort
 MPIFC=mpif90
 #OPT=-i-dynamic
 VPATH = ../common ../solver ../common_mpi ../src_tide 
-OPT0= -O3 -xAVX -qmkl=parallel -lmpi -traceback -g  
-#OPT0= -O -fpe0 -check bounds -traceback -g  -qmkl=parallel -lmpi
+#OPT0= -O3 -xAVX -qmkl=parallel -lmpi -traceback -g
+OPT0= -O0 -fpe0 -check bounds -check pointers -check uninit -traceback -g  -qmkl=parallel -lmpi
 
 #2016.03.03 solver with many modules
 

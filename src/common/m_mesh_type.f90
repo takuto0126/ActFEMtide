@@ -305,21 +305,25 @@ subroutine allocate_mesh(h_mesh)
 implicit none
 
 type(mesh),intent(inout) :: h_mesh
+integer(4) :: idbg
 
 !# xyz
-allocate (h_mesh%xyz(3,h_mesh%node))
+write(*,*) "DBG node=",h_mesh%node,"ntet=",h_mesh%ntet,"ntri=",h_mesh%ntri,&
+&          "nlin=",h_mesh%nlin,"npoi=",h_mesh%npoi ; call flush(6)
+allocate (h_mesh%xyz(3,h_mesh%node),stat=idbg); write(*,*) "DBG xyz stat=",idbg; call flush(6)
 !# node composing elements
-allocate (h_mesh%n4(h_mesh%ntet,4))
-allocate (h_mesh%n3(h_mesh%ntri,3))
+allocate (h_mesh%n4(h_mesh%ntet,4),stat=idbg); write(*,*) "DBG n4 stat=",idbg; call flush(6)
+allocate (h_mesh%n3(h_mesh%ntri,3),stat=idbg); write(*,*) "DBG n3 stat=",idbg; call flush(6)
+write(*,*) allocated(h_mesh%n2)
 write(*,*) "h_mesh%nlin =", h_mesh%nlin
-allocate (h_mesh%n2(h_mesh%nlin,2))
-allocate (h_mesh%n1(h_mesh%npoi,1))
+allocate (h_mesh%n2(h_mesh%nlin,2),stat=idbg); write(*,*) "DBG n2 stat=",idbg; call flush(6)
+allocate (h_mesh%n1(h_mesh%npoi,1),stat=idbg); write(*,*) "DBG n1 stat=",idbg; call flush(6)
 
 !# flags
-allocate (h_mesh%n4flag(h_mesh%ntet,2))
-allocate (h_mesh%n3flag(h_mesh%ntri,2))
-allocate (h_mesh%n2flag(h_mesh%nlin,2))
-allocate (h_mesh%n1flag(h_mesh%npoi,2))
+allocate (h_mesh%n4flag(h_mesh%ntet,2),stat=idbg); write(*,*) "DBG n4flag stat=",idbg; call flush(6)
+allocate (h_mesh%n3flag(h_mesh%ntri,2),stat=idbg); write(*,*) "DBG n3flag stat=",idbg; call flush(6)
+allocate (h_mesh%n2flag(h_mesh%nlin,2),stat=idbg); write(*,*) "DBG n2flag stat=",idbg; call flush(6)
+allocate (h_mesh%n1flag(h_mesh%npoi,2),stat=idbg); write(*,*) "DBG n1flag stat=",idbg; call flush(6)
 
 !# model
 !allocate (h_mesh%iele2model(h_mesh%ntet))
@@ -345,14 +349,16 @@ do i=1,4
 read(1,*)
 end do
 read(1,*) node
-!write(*,*) "node=",node
+write(*,*) "DBGcount node=",node
 do i=1,node+2 ! include "$EndNodes", "$Elements" lines
 read(1,*)
 end do
 read(1,*) nele ! total number of elements
+write(*,*) "DBGcount nele=",nele
 npoi=0;nlin=0;ntri=0;ntet=0
 do i=1,nele
 read(1,*) j,itype,ii,jj,kk,(n44(k),k=1,etype(itype))
+if ( i .le. 3 .or. i .ge. nele-2 ) write(*,*) "DBGcount i=",i,"j=",j,"itype=",itype
 if ( itype .eq. 15) then   ! Point element
 npoi=npoi+1
 else if ( itype .eq. 1) then ! Line element
@@ -439,9 +445,11 @@ write(*,10) " # of Tetrahedron elements :",h_mesh%ntet
 write(*,10) " # of Traiangle group1     :",nkk
 !write(*,'(a)') " ---" ! 2024.02.025
 !# count each group number for tetrahedron 2024.02.05
- ngroup = h_mesh%n4flag(h_mesh%ntet,2)
+ ngroup = 0 ! 2026.07.23
+ if ( h_mesh%ntet .ge. 1) ngroup = h_mesh%n4flag(h_mesh%ntet,2) ! "if" is added 2026.07.23
  allocate(icount(ngroup))
-do itet=1,h_mesh%ntet
+ icount(:)=0 ! valid after fortran 2003, if ngroup = 0, nothing to be done here 2026.07.23
+do itet=1,h_mesh%ntet ! if ngroup = 0, ntet is 0 as well, so this loop is not executed 2026.07.23
  do j=1,ngroup
     if ( h_mesh%n4flag(itet,2) .eq. j ) icount(j) = icount(j) + 1
  end do

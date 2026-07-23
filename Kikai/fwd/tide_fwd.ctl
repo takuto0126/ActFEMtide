@@ -17,15 +17,15 @@ header2d  (a50)    !nakadake2d
 header3d  (a50)    !nakadake3d
 # of frequency     !1
 Frequency [Hz]     !0.00002237
-west bound         !-200
-east bound         !200
-south bound        !-200
-north bound        !200
+west bound         !-200.0
+east bound         !200.0
+south bound        !-200.0
+north bound        !200.0
 lenout [km]        !100.0
-upz in [km]  (>0)  !500
-downz in [km](<0)  !-500
-zmax   [km]        !1000
-zmin   [km]        !-1000
+upz in [km]  (>0)  !500.0
+downz in [km](<0)  !-500.0
+zmax   [km]        !1000.0
+zmin   [km]        !-1000.0
 sizein [km]        !0.10
 sizebo [km]        !2.0
 sigma_obs [km]     !0.4

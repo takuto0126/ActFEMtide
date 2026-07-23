@@ -42,6 +42,7 @@ cd -
 
 
 #[6]##  homogeneous resisticity input, depth cuboid specification
+: << 'COMMENT' # comment out until COMMENT
 cat > change_cond.ctl <<EOF
 !------10!-------20!----
 input 3d mshfile   !/home/nonoyama/tide/Kikai/mesh_light/em3d.msh
@@ -55,6 +56,7 @@ output cond        !./cond_test.msh
 minmax depth [km]  !  -50.3           0.1
 1  rho    [Ohm.m]  ! 100.0
 EOF
+COMMENT
 
 ${SRC}/change_model2cond.exe < change_cond.ctl
 #./gmtslice_change.sh

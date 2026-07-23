@@ -1,5 +1,5 @@
 !------10!-------20!----
-input 3d mshfile   !../mesh/em3d.msh
+input 3d mshfile   !/home/nonoyama/tide/Kikai/mesh_light/em3d.msh
 0homo,1cond,2model !0
 homo resistivity   !100.0
 output cond        !./cond_test.msh
