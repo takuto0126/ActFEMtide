@@ -1,5 +1,6 @@
 phase_shift.f90
 *.log
+site.dat
 tmp.ctl
 result/*
 ! result/.gitkeep
