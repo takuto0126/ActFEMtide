@@ -6,7 +6,7 @@ head="polygon"
 sdir="../../tmtgem/mesh"
 ctl="mesh.ctl"
 
-OPT=-setnumber General.RandomSeed 12345 # 2026.07.23 for the same mesh generation, random seed is fixed
+OPT="-setnumber General.RandomSeed 12345" # 2026.07.23 for the same mesh generation, random seed is fixed
 
 # [0] coastline.exe
 cd $sdir

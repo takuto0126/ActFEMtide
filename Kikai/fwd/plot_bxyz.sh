@@ -1,7 +1,7 @@
 #!/bin/bash
 
-infile=./result_xy2/bxyz_xy2D0.22E-04_S1.dat
-topo=../../Kikai/mesh_light/topo.xyz
+infile=./result/bxyz_xy2D0.22E-04_S1.dat
+topo=../topo.xyz
 
 wesn=-150/150/-150/150
 di=2
