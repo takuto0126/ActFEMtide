@@ -26,6 +26,17 @@ tminami@port.kobe-u.ac.jp
 4. [Run sample simulations](#Run_sample_simulations)  
  - Sample 1: [Kikai](#Tohoku_small)
 
+## 0 Get ActFEMtide
+Please download ActFEMtide via github. If you don't have ssh access to github, type 
+####
+    $git clone https://github.com/takuto0126/ActFEMtide
+
+If you have ssh access to github,
+####
+    $git clone git@github.com:takuto0126/ActFEMtide.git 
+
+Pull Request to ActFEMtide main branch is always welcome!
+
 ## 1 Introduction <a id="Introduction"></a>
 __ActFEMtide__ is a simulation code for calculating tide-generated electromagnetic fields via electromotive force in the ocean. The main solver is based on __ActFEM__ [(Minami et al. 2018)](#Minami2018) with the replacement of the source term of electric dipole source by tidally-induced electromotive force ($\mathbf{v}\times \mathbf{F}$).
 __ActFEMtide__ is written in fortran and uses intel-math-kernel library (mkl) for the use of a sparse direct solver, PARDISO. ActFEMtide can use openMP for parallel computation with PARDISO, and MPI for parallel computation for multiple frequencies.
@@ -74,12 +85,12 @@ If you are working in triton, copy data by the folloiwng command in ActFEMtide/m
 Please confirm that in the DATA folder, the following files are prepared:
 
 
-### Step 1: "Preparation of topo" (ActFEMtide/Kikai/topo/)
+### Step 1: Preparation of topo (ActFEMtide/Kikai/topo/)
 #### convert etopo grd file to ascii *.xyz file. 
     $cd Kikai/topo
     $./mk_etopo_kikai.sh        (etopo_kikai-l.xyz is generated)
 
-### Step 2: Generation of Tetrahedral mesh (ActFEMtide/Kikai/mesh/)
+### Step 2: Generation of tetrahedral mesh (ActFEMtide/Kikai/mesh/)
 #### Generation of tetrahedral mesh 
     $cd ../mesh
     $./tetmeshgen.sh             (em3d.msh and others are generated)
@@ -91,17 +102,24 @@ It takes a while dependent on the spec of your PC. Many files are generated but 
 
 If you generate the mesh successfully, you can see the mesh.
 
-## Step 4: Preapre tidal flow and background magnetic field
+### Step 4: Prepare resistivity model (ActFEMtide/Kikai/structure/)
+#### Based on the generated mesh, resisitivity model is created.
+    $cd ../structure/
+    $./change_model2cond.sh
+Please check the change_cond.ctl for the parameters.
+
+### Step 5: Preapre tidal flow and background magnetic field (ActFEMtide/Kikai/fvxyz/)
 ####
     $cd ../fvxyz
     $./mkfvxyz_mesh.sh
 
-## Step 5: run ActFEMtide
+### Step 6: run ActFEMtide (ActFEMtide/Kikai/fwd/)
 ####
     $cd ../fwd
     $./run_fwd.sh
+See result/ folder for output files.
 
-## Step 6: check the results
+### Step 7: check the results (ActFEMtide/Kikai/fwd/)
     $./plot_bxyz.sh
     $./plot_ixyh.sh
 You can genrate two pdf files below.
