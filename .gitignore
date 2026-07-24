@@ -6,3 +6,4 @@
 *.mod
 *.exe
 pull.sh
+pullresult.sh
