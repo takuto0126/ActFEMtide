@@ -2,115 +2,127 @@
 ! Coded on 2017.06.08
 ! to use amp and phase of bz
 program inversion_joint
-!
-use param
-use mesh_type
-use line_type
-use face_type
-use matrix
-use modelpart
-use constants        ! added on 2017.05.14
-use iccg_var_takuto  ! added on 2017.05.14
-use outresp
-use jacobian_joint   ! added on 2022.01.05
-use freq_mpi_joint   ! added on 2017.06.07FF
-use caltime          ! added on 2017.09.11
-use spectral         ! added on 2017.12.12
-use modelroughness   ! added on 2017.12.12
-!# Modification for joint inversion from inv_ap 2021.12.25
-use shareformpi_joint! added on 2021.12.25
-use surface_type     ! 2021.12.25
-use param_mt         ! 2021.12.25
-use param_jointinv   ! 2021.12.25
-!
-implicit none
-type(param_forward)    :: g_param      ! see m_param.f90
-type(param_source)     :: sparam       ! see m_param.f90
-type(param_cond)       :: g_cond       ! see m_param.f90 : goal conductivity
-type(param_cond)       :: h_cond       ! see m_param.f90 : initial structure
-type(param_cond)       :: r_cond       ! see m_param.f90 : ref 2017.07.19
-type(param_joint)      :: g_param_joint! see m_param_jointinv.f90 ! 2021.12.25
-type(mesh)             :: g_mesh       ! see m_mesh_type.f90
-type(mesh)             :: h_mesh       ! z file; see m_mesh_type.f90
-type(line_info)        :: g_line       ! see m_line_type.f90
-type(face_info)        :: g_face       ! see m_line_type.f90
-type(modelpara)        :: g_modelpara  ! see m_modelpart.f90
-type(model)            :: g_model_ref  ! see m_modelpart.f90
-type(model)            :: g_model_ini  ! see m_modelpart.f90 2017.08.31
-type(model)            :: h_model      ! see m_modelpart.f90 2017.05.17
-type(model)            :: pre_model    ! see m_modelpart.f90, 2017.08.31
-type(data_vec_ap)      :: g_data       ! observed data  ; see m_param_jointinv.f90
-type(data_vec_ap)      :: h_data       ! calculated data; see m_param_jointinv.f90
-type(data_vec_mt)      :: g_data_mt    ! observed   data 2021.12.27
-type(data_vec_mt)      :: h_data_mt    ! calculated data 2021.12.27
-type(freq_info_joint)  :: g_freq_joint ! see m_freq_mpi_joint.f90  ! 2022.10.20
-type(real_crs_matrix)  :: RTR,CD       ! see m_matrix.f90 20
-type(real_crs_matrix)  :: BMI          ! see m_matrix.f90 2017.12.13
-type(real_crs_matrix)  :: BM           ! see m_matrix.f90 2017.12.25
-type(real_crs_matrix)  :: PT(5)        ! (1:5)[nobs,nlin] ! 2018.10.04, Bx,By,Bz,Ex,Ey
-type(real_crs_matrix)  :: R,RI         ! see m_matrix.f90 2017.12.18
-type(global_matrix)    :: A            ! see m_iccg_var_takuto.f90
-type(real_crs_matrix)  :: coeffobs(2,3)! see m_matrix.f90 ; 1 for edge, 2 for face
-integer(4)                                  :: ijoint ! 1:ACTIVE, 2: MT, 3: Joint 2022.10.14
-logical                                     :: MT, ACT ! 1: if ACTIVE, 2:if MT necessary 2022.10.14
-integer(4)                                  :: ite,i,j,k,errno,node
-integer(4)                                  :: nline, ntet, nobs_act, ndat ! 2017.08.31
-integer(4)                                  :: ndat_mt                 ! 2022.01.04
-integer(4)                                  :: nsr_inv, nmodel         ! 2017.09.04
-integer(4)                                  :: nmodelactive            ! 2018.06.25
-real(8)                                     :: omega, freq_tot_ip
-integer(4)                                  :: nfreq_tot, nfreq_act, nfreq_tot_ip ! 2022.10.20
-integer(4)                                  :: nfreq_act_ip,nfreq_mt_ip ! 2022.10.20
-real(8)                                     :: nrms, nrms0, alpha      ! 2017.09.08
-real(8)                                     :: misfit       ! 2017.12.22
-complex(8),allocatable,dimension(:,:)       :: fp,fs        ! (nline,nsr_inv) 2017.08.31
-type(obsfiles)                              :: files        ! see m_outresp.f90
-type(respdata),allocatable,dimension(:,:,:) :: resp5        ! 2017.08.31resp5(5,nsr,nfreq_ip)
-type(respdata),allocatable,dimension(:,:,:) :: tresp        ! 2017.08.31 tresp(5,nsr,nfreq)
-integer                                     :: access       ! 2017.05.15
-type(complex_crs_matrix)                    :: ut(5)        ! 2018.10.04, Bx,By,Bz,Ex,Ey
-type(amp_phase_dm),allocatable,dimension(:) :: g_apdm       ! 2017.06.07
-type(amp_phase_dm),allocatable,dimension(:) :: gt_apdm      ! 2017.06.07
-type(real_crs_matrix)                       :: JJ           ! Jacobian matrix, 2017.05.17
-real(8)                                     :: rough1,rough2! 2017.12.13
-integer(4)                                  :: ialpha       ! 2017.07.19
-real(8)                                     :: nrms_init    ! 2017.07.19
-character(50)                               :: head         ! 2017.07.25
-character(1)                                :: num2         ! 2017.09.11
-type(watch)                                 :: t_watch      ! 2017.09.11
-type(watch)                                 :: t_watch0     ! 2018.03.02
-real(8)                                     :: nrms_ini     ! 2018.06.25
-real(8)                                     :: frms         ! 2018.06.25
-!## modification from inv_ap to inv_joint  2021.12.25 ======================================
-complex(8),    allocatable,dimension(:,:)   :: fs_mt        ! (nline,2) 2021.12.30
-integer(4)                                  :: nfreq_mt     ! 2022.10.20
-type(param_forward_mt)                      :: g_param_mt   ! 2021.12.25
-type(surface)                               :: g_surface(6) ! 2021.12.25
-type(param_cond)                            :: i_cond       ! see m_param.f90 2021.12.25
-integer(4),    allocatable,dimension(:,:)   :: n4           ! 2021.12.27
-type(real_crs_matrix)                       :: CD_mt        ! 2021.12.29
-type(complex_crs_matrix)                    :: ut_mt(4)     ! [nobs_mt,nline]*4 2021.12.30
-type(real_crs_matrix)                       :: PT_mt(4)     ! [nobs_mt,nline]*4 Bx,By,Ex,Ey
-type(real_crs_matrix)                       :: coeffobs_mt(2,3)! see m_matrix.f90 2021.12.30
-type(respdata),allocatable,dimension(:,:,:) :: resp5_mt     ! 2021.12.30
-type(respdata),allocatable,dimension(:,:,:) :: tresp_mt     ! 2022.01.02
-type(respmt),  allocatable,dimension(:)     ::  imp_mt     ! 2021.12.30
-type(respmt),  allocatable,dimension(:)     :: timp_mt     ! 2022.01.02
-integer(4)                                  :: nsr_mt=2     ! 2021.12.30
-character(1) :: num
-real(8)      :: nrms_mt   ! 2022.01.04
-real(8)      :: misfit_mt ! 2022.01.04
-real(8)      :: nrms_mt_ini     ! 2018.06.25
-type(mt_dm),   allocatable,dimension(:)     :: g_mtdm  ! 2022.01.05
-type(mt_dm),   allocatable,dimension(:)     :: gt_mtdm ! 2022.01.05
-integer(4)                                  :: nobs_mt ! 2022.01.05
-type(real_crs_matrix)                       :: JJ_mt   ! Jacobian matrix, 2022.01.05
-!##===========================================================================
-integer(4) :: ip,np, itemax = 20, iflag, ierr=0, i_act,i_mt
-integer(4) :: kmax ! maximum lanczos procedure 2017.12.13
-integer(4) :: nalpha, ialphaflag  ! 2017.09.08
-integer(4) :: itype_roughness     ! 2017.12.13
-!#[Explanation]---------------------------------------------------------
+! modules
+ use param
+ use mesh_type
+ use line_type
+ use face_type
+ use matrix
+ use modelpart
+ use constants        ! added on 2017.05.14
+ use iccg_var_takuto  ! added on 2017.05.14
+ use outresp
+ use jacobian_joint   ! added on 2022.01.05
+ use freq_mpi_joint   ! added on 2017.06.07FF
+ use caltime          ! added on 2017.09.11
+ use spectral         ! added on 2017.12.12
+ use modelroughness   ! added on 2017.12.12
+ !# Modification for joint inversion from inv_ap 2021.12.25
+ use shareformpi_joint! added on 2021.12.25
+ use surface_type     ! 2021.12.25
+ use param_mt         ! 2021.12.25
+ use param_jointinv   ! 2021.12.25
+ use shareformpi_mt ! see ../common_mpi/m_shareformpi_mt.f90 2025.09.16
+ use forward_joint_inv ! see forward_joint_inv.f90 2026.03.03
+! declaration
+ implicit none
+ type(param_forward)    :: g_param      ! see m_param.f90
+ type(param_source)     :: sparam       ! see m_param.f90
+ type(param_cond)       :: g_cond       ! see m_param.f90 : goal conductivity
+ type(param_cond)       :: h_cond       ! see m_param.f90 : initial structure
+ type(param_cond)       :: r_cond       ! see m_param.f90 : ref 2017.07.19
+ type(param_joint)      :: g_param_joint! see m_param_jointinv.f90 ! 2021.12.25
+ type(mesh)             :: g_mesh       ! see m_mesh_type.f90
+ type(mesh)             :: h_mesh       ! z file; see m_mesh_type.f90
+ type(line_info)        :: g_line       ! see m_line_type.f90
+ type(face_info)        :: g_face       ! see m_line_type.f90
+ type(modelpara)        :: g_modelpara  ! see m_modelpart.f90
+ type(model)            :: g_model_ref  ! see m_modelpart.f90
+ type(model)            :: g_model_ini  ! see m_modelpart.f90 2017.08.31
+ type(model)            :: h_model      ! see m_modelpart.f90 2017.05.17
+ type(model)            :: pre_model    ! see m_modelpart.f90, 2017.08.31
+ type(data_vec_ap)      :: g_data       ! observed data  ; see m_param_jointinv.f90
+ type(data_vec_ap)      :: h_data       ! calculated data; see m_param_jointinv.f90
+ type(data_vec_mt)      :: g_data_mt    ! observed   data 2021.12.27
+ type(data_vec_mt)      :: h_data_mt    ! calculated data 2021.12.27
+ type(freq_info_joint)  :: g_freq_joint ! see m_freq_mpi_joint.f90  ! 2022.10.20
+ type(real_crs_matrix)  :: RTR,CD       ! see m_matrix.f90 20
+ type(real_crs_matrix)  :: BMI          ! see m_matrix.f90 2017.12.13
+ type(real_crs_matrix)  :: BM           ! see m_matrix.f90 2017.12.25
+ type(real_crs_matrix)  :: PT(5)        ! (1:5)[nobs,nlin] ! 2018.10.04, Bx,By,Bz,Ex,Ey
+ type(real_crs_matrix)  :: R,RI         ! see m_matrix.f90 2017.12.18
+ type(global_matrix)    :: A            ! see m_iccg_var_takuto.f90
+ type(real_crs_matrix)  :: coeffobs(2,3)! see m_matrix.f90 ; 1 for edge, 2 for face
+ integer(4)                                  :: ijoint ! 1:ACTIVE, 2: MT, 3: Joint 2022.10.14
+ logical                                     :: MT=.false., ACT=.false., TIP=.false. ! 2026.03.03
+ integer(4)                                  :: ite,i,j,k,errno,node
+ integer(4)                                  :: nline, ntet, nobs_act, ndat ! 2017.08.31
+ integer(4)                                  :: ndat_mt                 ! 2022.01.04
+ integer(4)                                  :: nsr_inv, nmodel         ! 2017.09.04
+ integer(4)                                  :: nmodelactive            ! 2018.06.25
+ real(8)                                     :: omega, freq_tot_ip
+ integer(4)                                  :: nfreq_tot, nfreq_act, nfreq_tot_ip ! 2022.10.20
+ integer(4)                                  :: nfreq_act_ip,nfreq_mt_ip ! 2022.10.20
+ real(8)                                     :: nrms=0, nrms0, alpha,alpha_new  ! 2025.09.19
+ real(8)                                     :: misfit       ! 2017.12.22
+ complex(8),    allocatable,dimension(:,:)   :: fp,fs        ! (nline,nsr_inv) 2017.08.31
+ type(obsfiles)                              :: files        ! see m_outresp.f90
+ type(respdata),allocatable,dimension(:,:,:) :: resp5        ! 2017.08.31resp5(5,nsr,nfreq_ip)
+ type(respdata),allocatable,dimension(:,:,:) :: tresp        ! 2017.08.31 tresp(5,nsr,nfreq)
+ integer                                     :: access       ! 2017.05.15
+ type(complex_crs_matrix)                    :: ut(5)        ! 2018.10.04, Bx,By,Bz,Ex,Ey
+ type(amp_phase_dm),allocatable,dimension(:) :: g_apdm       ! 2017.06.07
+ type(amp_phase_dm),allocatable,dimension(:) :: gt_apdm      ! 2017.06.07
+ type(real_crs_matrix)                       :: JJ           ! Jacobian matrix, 2017.05.17
+ real(8)                                     :: rough1,rough2! 2017.12.13
+ integer(4)                                  :: ialpha       ! 2017.07.19
+ character(50)                               :: head         ! 2017.07.25
+ character(1)                                :: num2         ! 2017.09.11
+ type(watch)                                 :: t_watch,t_watch1 ! 2025.09.18
+ type(watch)                                 :: t_watch0     ! 2018.03.02
+ real(8)                                     :: nrms_ini     ! 2018.06.25
+ real(8)                                     :: frms         ! 2018.06.25
+!## addition of declaration from inv_ap to inv_joint  2021.12.25 ====================
+  complex(8),    allocatable,dimension(:,:)   :: fs_mt        ! (nline,2) 2021.12.30
+  integer(4)                                  :: nfreq_mt     ! 2022.10.20
+  type(param_forward_mt)                      :: g_param_mt   ! 2021.12.25
+  type(surface)                               :: g_surface(6) ! 2021.12.25
+  type(param_cond)                            :: i_cond       ! see m_param.f90 2021.12.25
+  integer(4),    allocatable,dimension(:,:)   :: n4           ! 2021.12.27
+  type(real_crs_matrix)                       :: CD_mt        ! 2021.12.29
+  type(complex_crs_matrix)                    :: ut_mt(5)     ! [nobs_mt,nline]*4 2021.12.30
+  type(real_crs_matrix)                       :: PT_mt(5)     ! [nobs_mt,nline]*4 Bx,By,Ex,Ey,Bz
+  type(real_crs_matrix)                       :: coeffobs_mt(2,3)! see m_matrix.f90 2021.12.30
+  type(respdata),allocatable,dimension(:,:,:) :: resp5_mt     ! 2021.12.30 5 comp * 2 MT polarization 
+  type(respdata),allocatable,dimension(:,:,:) :: tresp_mt     ! 2022.01.02 see ../common/m_outresp.f90
+  type(respmt),  allocatable,dimension(:)     :: imp_mt       ! 2021.12.30 MT imp
+  type(respmt),  allocatable,dimension(:)     :: timp_mt      ! 2022.01.02 see ../common/m_outresp.f90
+  integer(4)                                  :: nsr_mt=2     ! 2021.12.30
+  character(1) :: num
+  real(8)      :: nrms_mt=0.d0, nrms_mt0 ! 2022.01.04
+  real(8)      :: misfit_mt       ! 2022.01.04
+  real(8)      :: misfit_tipper   ! 2023.12.22
+  real(8)      :: nrms_mt_ini     ! 2018.06.25
+  type(mt_dm),   allocatable,dimension(:)     :: g_mtdm  ! 2022.01.05 see m_jacobian_joint.f90
+  type(mt_dm),   allocatable,dimension(:)     :: gt_mtdm ! 2022.01.05
+  type(tip_dm),  allocatable,dimension(:)     :: g_tipdm ! 2023.12.22 see m_jacobian_joint.f90
+  type(tip_dm),  allocatable,dimension(:)     :: gt_tipdm! 2023.12.22
+  integer(4)                                  :: nobs_mt ! 2022.01.05
+  type(real_crs_matrix)                       :: JJ_mt   ! Jacobian matrix, 2022.01.05
+  type(real_crs_matrix)                       :: JJ_tip  ! Jacobian matrix for tipper, 2026.03.03
+!## addition of declaration for tipper data 2023.12.22
+  integer(4)                                  :: ndat_tipper ! 2023.12.23
+  type(real_crs_matrix)                       :: CD_tip      ! 2023.12.21 
+  type(resptip), allocatable,dimension(:)     :: tip_mt      ! 2023.12.23 MT imp
+  type(resptip), allocatable,dimension(:)     :: ttip_mt     ! 2023.12.23 ../common/m_outresp.f90
+  real(8)        :: nrms_tip,nrms_tip_ini,nrms_tip0  ! 2024.08.30
+  real(8)        :: misfit_tip ! 2023.12.25
+!## Declaration for global integers ==================================================
+ integer(4) :: ip,np, itemax = 20, iflag, ierr=0, i_act,i_mt
+ integer(4) :: kmax ! maximum lanczos procedure 2017.12.13
+ integer(4) :: nalpha, ialphaflag,iflag_replace  ! 2025.09.19
+ integer(4) :: itype_roughness     ! 2017.12.13
+!#[Explanation document]---------------------------------------------------------
  !# Algorithm
  !# Phi(m) = F(m) + alpha*R(m)
  !# F(m)     = 1/2*(d(m)-d_obs)^T Cd^-1 (d(m)-d_obs)
@@ -151,7 +163,11 @@ integer(4) :: itype_roughness     ! 2017.12.13
  !# [6] cal data misfit F(m)
  !# [7] solve beta in eq. 1 (by PARDISO)
  !# [8] m_k+1 = m_ref + Cm*J*beta
+call watchstart(t_watch1) ! 2025.09.17
 
+ip = -1 ; np = -1 ; errno = 0
+!write(*,*) "np, ip = ", np, ip ! 2025.07.30
+!write(*,*) "n_ebfem_joint start!!"! 2025.07.30
 !#[-1]## START MPI on 2017.05.29
  CALL MPI_INIT(errno)
  CALL MPI_COMM_RANK(mpi_comm_world, ip, errno)  ! ip starts with 0 in the following
@@ -164,40 +180,40 @@ if ( ip .eq. 0) then !################################################# ip = 0
 !#[-1]## select inversion type
   read(*,'(i5)') ijoint ! 1: only active, 2: only MT, 3: both active and MT data 2022.10.14
   call declareinversiontype(ijoint,ierr) ! 2022.10.14
+  g_param_joint%ijoint = ijoint ! 2026.03.03
   if ( ierr .ne. 0 ) goto 998
-  call setnec(ijoint,ACT,MT) ! 2022.10.14
-
-  !#[0]## read parameters
-!  if(MT)  CALL READPARAM(g_param,sparam,g_cond) ! include READCOND for initial model 2022.10.14  
-  if(ACT) CALL READPARAM(g_param,sparam,g_cond) ! include READCOND for initial model 2022.10.14  
+  call setnec(g_param_joint,ACT,MT) ! set ACT, MT (m_param_joint.f90) TIP is not set here 2026.03.03
+!#[0]## read parameters, g_param, g_param_mt, g_param_joint,s_param, gen g_data,g_data_mt
+  if(ACT) CALL READPARAM(g_param,sparam,g_cond) ! include READCOND for initial model 2022.10.14
   if(MT ) CALL READPARAM_MT(g_param_mt,i_cond) ! read MT param 2022.10.14 (i_cond is not used)
-  
-  
-  CALL READPARAJOINTINV(ijoint,g_param_joint,g_modelpara,g_param,sparam,g_param_mt,g_data,g_data_mt)
+  CALL READPARAJOINTINV(g_param_joint,g_modelpara,g_param,sparam,g_param_mt,g_data,g_data_mt) 
+  call setnec(g_param_joint,ACT,MT,TIP) ! TIP is also set, see m_param_joint.f90 2026.03.03
+  write(*,*) "ACT, MT, TIP", ACT, MT, TIP ! 2026.03.03
   g_param_joint%nobs_mt  = g_param_mt%nobs  ! 2022.01.04
   g_param_joint%nfreq_mt = g_param_mt%nfreq ! 2022.01.04
-  !m_param_jointinv.f90 2022.10.22
+  !stop ok! 2026.03.02
 
-  !#[1]## read mesh
-  if(ACT)CALL READMESH_TOTAL(g_mesh,g_param%g_meshfile)
-  if(MT)CALL READMESH_TOTAL(g_mesh,g_param_mt%g_meshfile)
-  
-  
-  if ( access( g_param%z_meshfile, " ") .eq. 0 ) then! if exist, 2017.05.15
-    CALL READMESH_TOTAL(h_mesh,g_param%z_meshfile)
-    CALL PREPZSRCOBS(h_mesh,g_param,sparam)          ! see below, include kill h_mesh
-    if(MT)CALL PREPZSRCOBS_MT(h_mesh,g_param_mt)          ! see below, include kill h_mesh
- end if
+!#[1]## read mesh
+    if (ACT) then
+       CALL READMESH_TOTAL(g_mesh,g_param%g_meshfile)
+       CALL READMESH_TOTAL(h_mesh,g_param%z_meshfile)
+    else 
+       CALL READMESH_TOTAL(g_mesh,g_param_mt%g_meshfile)
+       CALL READMESH_TOTAL(h_mesh,g_param_mt%z_meshfile);end if
 
+    if (ACT) CALL PREPZSRCOBS(h_mesh,g_param,sparam)! see below, include
+    if (MT)  CALL PREPZOBSMT(h_mesh,g_param_mt)     ! see below 2024.10.07
+    CALL OUTSITEINFO(g_param,sparam,g_param_mt,g_param_joint,ACT,MT) ! see below 2025.09.18
 
- 
-
- !write(6,*)"done1"
-  CALL GENXYZMINMAX(g_mesh,g_param) ! see below 2021.12.27
- g_param_mt%xyzminmax = g_param%xyzminmax ! 2021.12.27
- ! write(6,*)"done2"
- if(ACT)CALL READLINE(g_param%g_lineinfofile,g_line)
- if(MT)CALL READLINE(g_param_mt%g_lineinfofile,g_line)    ! see m_line_type.f90
+    if (ACT) then
+       CALL GENXYZMINMAX(g_mesh,g_param) ! see below 2021.12.27
+       g_param_mt%xyzminmax = g_param%xyzminmax ! 2021.12.27
+       CALL READLINE(g_param%g_lineinfofile,g_line)      ! see m_line_type.f90
+    else 
+        CALL GENXYZMINMAX_MT(g_mesh,g_param_mt)          ! see below 2025.09.18
+        CALL READLINE(g_param_mt%g_lineinfofile,g_line)  ! see m_line_type.f90
+        g_param%xyzminmax = g_param_mt%xyzminmax         ! 2025.09.18
+      end if  
 
   !=================================================================
   nline   = g_line%nline      ! 2021.09.14
@@ -220,23 +236,21 @@ if ( ip .eq. 0) then !################################################# ip = 0
  !        Face4
  if(MT ) CALL EXTRACT6SURFACES(g_mesh,g_line,g_face,g_surface) ! ../src_2D/m_surface_type.f90
  if(MT ) CALL FINDBOUNDARYLINE(g_mesh,g_surface)  ! Find boudnary line m_surface_type.f90
-!=================================================================
-
 !#[4]## prepare initial and ref cond, note sigma_air of ref and init is from g_cond
   CALL DUPLICATESCALARCOND(g_cond,r_cond)            ! see m_param.f90,  2017.08.31
   CALL DUPLICATESCALARCOND(g_cond,h_cond)            ! see m_param.f90,  2017.08.31
   CALL deallocatecond(g_cond)                        ! see m_param.f90,  2017.08.31
   CALL READREFINITCOND(r_cond,h_cond,g_param_joint,g_mesh)  ! 2018.10.04 homo init is added
 
-!#[5]## generate model space
+!#[5]## generate model space see m_modelpart.f90
   CALL genmodelspace(g_mesh,g_modelpara,g_model_ref,g_param,h_cond)! m_modelpart.f90
-  CALL modelparam(g_model_ref)                       ! 2017.08.31 see m_modelpart.f90
-  CALL OUTMODEL(g_param_joint,g_model_ref,g_mesh,0,0)! 2017.09.11 for model parameter
+  CALL modelparam(g_model_ref)            ! generate random model m_modelpart.f90
+  CALL OUTMODEL(g_param_joint,g_model_ref,g_mesh,0,0)! to show model space 
   CALL assignmodelrho(r_cond,g_model_ref)            ! 2017.08.31 renew g_model_ref
   g_model_ini = g_model_ref                          ! 2017.08.31
   CALL assignmodelrho(h_cond,g_model_ini)            ! 2017.08.31
 
-!#[6]## cal BMI for SM
+!#[6]## cal BMI for SM or MSG for data-space inversion
   itype_roughness = g_param_joint%itype_roughness  ! 2017.12.25 see m_param_jointinv.f90
   if     ( itype_roughness == 1 )  then  ! SM: smoothest model
     CALL GENBMI_SM(BM,BMI,g_face,g_mesh,g_model_ref)  ! 2017.06.14 m_modelroughenss.f90
@@ -245,7 +259,7 @@ if ( ip .eq. 0) then !################################################# ip = 0
   end if
 
 !#[7]## cal Cd : ACTIVE -> CD, MT -> CD_mt
- CALL GENCD(g_data,g_data_mt,CD,CD_mt)                          ! see below
+ CALL GENCD(g_data,g_data_mt,CD,CD_mt,CD_tip)            ! see below 2023.12.21
 
 998 continue
 end if !################################################################# ip = 0 end
@@ -253,14 +267,15 @@ CALL MPI_BCAST(ierr,1, MPI_INTEGER4,0,MPI_COMM_WORLD,errno) ! share ierr 2022.10
 if ( ierr .ne. 0 ) goto 999 ! 2022.10.14
 
 !#[8]## share params, mesh, and line (see m_shareformpi.f90)
-  CALL shareapinv(g_param,sparam,h_cond,g_mesh,g_line,g_param_joint,g_model_ini,ip) ! 2018.10.04
-  CALL sharemt(g_param_mt,g_surface,ip) ! 2021.12.30
+  CALL sharejointinv(g_param,sparam,h_cond,g_mesh,g_line,g_param_joint,g_model_ini,ip) ! 2018.10.04
+  !write(*,*) "g_param_joint%ijoint",g_param_joint%ijoint,"ip",ip ! commented out 2026.03.11
+  CALL setnec(g_param_joint,ACT,MT,TIP) ! set ACT, MT, TIP after g_param_joint is shared, see m_param_jointinv.f90 2026.03.03
+  write(*,'(a,3l2,1x,a,i2.2)')"ACT,MT,TIP",ACT,MT,TIP,"ip=",ip    ! 2026.03.11
+  if (MT) CALL sharemt(g_param_mt,g_surface,ip) ! 2025.10.14
 
-!#[8.5]## linkglobalmodel2surface
-  call linkglobalmodel2surface(g_model_ini,g_surface(2:6)) ! 2022.01.16
-
-
- !#[9]## prepare A of surface for 2D TM calculation
+!#[8.5]## link globalmodel2surface
+  !call linkglobalmodel2surface(g_model_ini,g_surface(2:6)) ! 2022.01.16 Is this necessary? 2024.08.30 ! commented out 2025.07.31
+!#[9]## prepare A of surface for 2D TM calculation
   CALL PREPAOFSURFACE(g_surface(2:5),4,ip) ! allocate A and table_dof for 2DMT
 
 !#[10]## cal Pt: matrix for get data from simulation results
@@ -269,62 +284,84 @@ if ( ierr .ne. 0 ) goto 999 ! 2022.10.14
   CALL PREPAREPT_JOINT(coeffobs,coeffobs_mt,g_param_joint,PT,PT_mt)! 2018.10.04 see below
 
 !#[11]## Preparation for global stiff matrix
-  ijoint       = g_param_joint%ijoint           ! 2022.10.14
-  call setnec(ijoint,ACT,MT)                       ! 2022.10.14 see m_param_joint.f90
+  if (ip == 0) write(*,'(a)') "  ip  |  ACT   MT" ! 2022.12.05
+  CALL MPI_BARRIER(mpi_comm_world, errno)       ! 2022.12.05
+  write(*,'(i4,1x,2l6)') ip,ACT,MT                          ! 2022.12.05
   nline        = g_line%nline
   nobs_act     = g_param%nobs                   ! 2022.10.20
-  nobs_mt      = g_param_mt%nobs                ! 2022.01.05
+  nobs_mt      = g_param_mt%nobs                ! 2022.01.05 use this nobs in Tipper
   ntet         = g_mesh%ntet
   nmodel       = g_model_ini%nmodel             ! 2018.06.25
   nmodelactive = g_model_ini%nmodelactive       ! 2018.06.25
-  nsr_inv      = g_param_joint%nsr_inv          ! 2017.08.31
+  nsr_inv      = g_param_joint%nsr_inv          ! 2017.08.31 for CSEM
   CALL SET_ICCG_VAR(ntet,nline,g_line,A,ip)     ! see below, 2017.06.05
   ! write(*,'(a,2i6,a,i3)') "nmodel,nmodelactive",nmodel,nmodelactive,"ip",ip ! 2018.06.26
 
-  !#[12]## set frequency
+!#[12]## set frequency
   call SETFREQIPJOINT(g_param,g_param_mt,ip,np,g_freq_joint) ! see m_freq_mpi_joint.f90 2022.10.20
-  nfreq_tot    = g_freq_joint%nfreq_tot    ! ACT + MT 2022.10.20
-  nfreq_tot_ip = g_freq_joint%nfreq_tot_ip ! ACT + MT for ip
-  nfreq_act    = g_freq_joint%nfreq_act    ! 2022.10.20
+  nfreq_tot    = g_freq_joint%nfreq_tot        ! ACT + MT 2022.10.20
+  nfreq_tot_ip = g_freq_joint%nfreq_tot_ip     ! ACT + MT for ip
+  nfreq_act    = g_freq_joint%nfreq_act        ! 2022.10.20
   nfreq_act_ip = g_freq_joint%nfreq_act_ip(ip) ! 2022.10.20
   nfreq_mt     = g_freq_joint%nfreq_mt         ! 2022.10.20
   nfreq_mt_ip  = g_freq_joint%nfreq_mt_ip(ip)  ! 2022.10.20
-  
-!#[13]## allocate respdata and open output files for each observatory
-  if (ACT) allocate( resp5(5,nsr_inv,nfreq_act_ip)  )  ! 2020.10.20
-  if (ACT) allocate( tresp(5,nsr_inv,nfreq_act   )  )  ! 2020.10.20
-  if (ACT) CALL ALLOCATERESP(g_param,nsr_inv,resp5,tresp,ip,nfreq_act,nfreq_act_ip) ! 2020.10.20
 
-!#[14]## allocate respdata for MT
-  if (MT) allocate(  resp5_mt(5,nsr_mt,nfreq_mt_ip) ) ! 2022.10.20
-  if (MT) allocate(  tresp_mt(5,nsr_mt,nfreq_mt   ) ) ! 2022.10.20
-  if (MT) allocate(    imp_mt(         nfreq_mt_ip) ) ! 2022.10.20
-  if (MT) allocate(   timp_mt(         nfreq_mt   ) ) ! 2022.10.20
-  if (MT) CALL ALLOCATERESP_MT(nobs_mt,nsr_mt,resp5_mt, imp_mt,ip,nfreq_mt_ip) !2022.10.20
-  if (MT) CALL ALLOCATERESP_MT(nobs_mt,nsr_mt,tresp_mt,timp_mt,ip,nfreq_mt)    !2022.10.20
+  if (ip == 0 ) write(*,*) "-----------------------------------------------"
+  CALL MPI_BARRIER(mpi_comm_world, errno)                      ! 2022.12.05
+  write(*,'(2(a,i3))') "  nfreq_mt_ip  =",nfreq_mt_ip, " | ip =",ip ! 2022.12.05
+  CALL MPI_BARRIER(mpi_comm_world, errno)                      ! 2022.12.05
+  if (ip == 0 ) write(*,*) "-----------------------------------------------"
+  CALL MPI_BARRIER(mpi_comm_world, errno)                      ! 2022.12.05
+  write(*,'(2(a,i3))') "  nfreq_act_ip =",nfreq_act_ip," | ip =",ip ! 2022.12.05
+  CALL MPI_BARRIER(mpi_comm_world, errno)                      ! 2022.12.05
+
+!#[13]## allocate respdata for ACTIVE (open output files for each observatory)
+  if (ACT) then ! 2022.12.05
+        allocate( resp5(5,nsr_inv,nfreq_act_ip)  )  ! 2020.10.20
+        allocate( tresp(5,nsr_inv,nfreq_act   )  )  ! 2020.10.20
+        CALL ALLOCATERESP(g_param,nsr_inv,resp5,tresp,ip,nfreq_act,nfreq_act_ip) ! 2020.10.20
+  end if
+
+!#[14]## allocate respdata for MT    (open output files for each observatory)
+  if (MT) then ! 2022.12.05
+         allocate(  resp5_mt(5,nsr_mt,nfreq_mt_ip) ) ! 5 component for MT type(respdata)
+         allocate(  tresp_mt(5,nsr_mt,nfreq_mt   ) ) ! 5 component for MT type(respdata)
+         !# resp5_mt and tresp_mt are used for both impedance and tipper
+         allocate(    imp_mt(         nfreq_mt_ip) ) ! type(respmt) imp data
+         allocate(   timp_mt(         nfreq_mt   ) ) ! type(respmt)
+         allocate(    tip_mt(         nfreq_mt_ip) ) ! type(resptip) tipper data
+         allocate(   ttip_mt(         nfreq_mt   ) ) ! type(resptip) 2023.12.22
+         CALL ALLOCATERESP_MT(nobs_mt,nsr_mt,resp5_mt, imp_mt,tip_mt,ip,nfreq_mt_ip) !2023.12.22 see below
+         CALL ALLOCATERESP_MT(nobs_mt,nsr_mt,tresp_mt,timp_mt,ttip_mt,ip,nfreq_mt)   !2023.12.22
+  end if
 
  !  CALL PREPRESPFILES(g_param,files,resp5,nfreq) ! 2017.05.18
 
 !#[15]## initialize data vector
   if (ACT) CALL initializedatavec(g_param_joint,h_data)      ! m_param_joint.f90, 2017.08.31
   if (MT)  CALL initializedatavecmt(g_param_joint,h_data_mt) ! m_param_joint.f90 2022.01.04
-  ndat     = g_data%ndat                                     ! 2017.08.31
-  ndat_mt  = g_data_mt%ndat_mt                               ! 2022.01.04
-
-  if (ACT) allocate(g_apdm(nfreq_act_ip))
-  if (ACT) call allocateapdm(nobs_act,nfreq_act_ip,nmodelactive,nsr_inv,g_apdm ) ! 2018.06.25
-  if (ACT) allocate(gt_apdm(nfreq_act)  )
-  if (ACT) call allocateapdm(nobs_act,nfreq_act,   nmodelactive,nsr_inv,gt_apdm) ! 2018.06.25
-  if (ACT) allocate( fp(nline,nsr_inv),fs(nline,nsr_inv) )      ! 2017.08.31
-
-  if (MT) allocate( gt_mtdm(nfreq_mt), g_mtdm(nfreq_mt_ip))    ! 2022.01.05
-  if (MT) call allocatemtdm(nobs_mt,nfreq_mt_ip,nmodelactive, g_mtdm) ! 2022.01.05
-  if (MT) call allocatemtdm(nobs_mt,nfreq_mt,   nmodelactive,gt_mtdm) ! 2022.01.05
-  if (MT) allocate( fs_mt(nline,2)) ! 2021.12.30
-  !# MT allocate
+  if (TIP) CALL initializedatavectipper(g_param_joint,h_data_mt) ! m_param_joint.f90 2023.12.23
+  ndat        = g_data%ndat                                     ! 2017.08.31
+  ndat_mt     = g_data_mt%ndat_mt                               ! 2022.01.04
+  ndat_tipper = g_data_mt%ndat_tipper                            ! 2023.12.23
+  if (ACT) then ! 2022.12.05
+         allocate(g_apdm(nfreq_act_ip))
+         call allocateapdm(nobs_act,nfreq_act_ip,nmodelactive,nsr_inv,g_apdm ) ! 2018.06.25
+         allocate(gt_apdm(nfreq_act)  )
+         call allocateapdm(nobs_act,nfreq_act,   nmodelactive,nsr_inv,gt_apdm) ! 2018.06.25
+         allocate( fp(nline,nsr_inv),fs(nline,nsr_inv) )      ! 2017.08.31
+  end if
+  if (MT) then  ! 2022.12.05
+         allocate( gt_mtdm(nfreq_mt),  g_mtdm(nfreq_mt_ip)  )  ! 2022.01.05
+         allocate( gt_tipdm(nfreq_mt), g_tipdm(nfreq_mt_ip) )  ! 2024.08.30
+         call allocatemtdm(nobs_mt,nfreq_mt_ip,nmodelactive, g_mtdm) ! 2022.01.05
+         call allocatemtdm(nobs_mt,nfreq_mt,   nmodelactive,gt_mtdm) ! 2022.01.05
+         allocate( fs_mt(nline,2)) ! 2021.12.30
+  end if
 
 !#[16]## alpha loop start ======================================= alpha loop start
- ialphaflag = g_param_joint%ialphaflag ! 2021.12.25
+ ialphaflag    = g_param_joint%ialphaflag       ! 2021.12.25
+ iflag_replace = g_param_joint%iflag_replace ! 2025.09.19
  ialpha     = 1
  nalpha     = 1
  if ( ialphaflag .eq. 1 ) nalpha = g_param_joint%nalpha ! L-curve 2021.12.25
@@ -349,11 +386,12 @@ if ( ierr .ne. 0 ) goto 999 ! 2022.10.14
   end if
   if (ACT) open(21,file=head(1:len_trim(head))//"rms.dat")    ! 2022.10.14
   if (MT)  open(22,file=head(1:len_trim(head))//"rms_mt.dat") ! 2022.10.14
+  if (TIP) open(23,file=head(1:len_trim(head))//"rms_tip.dat")! 2023.12.25
 
  end if ! ip = 0 end
 
 !#[18]## iteration loop start ========================================== iteration loop start
- do ite = 1,20 !itemax
+ do ite = 1,itemax
 !#[19]## output cond and model file, convert h_model to h_cond 
   if ( ip .eq. 0) then
      call watchstart(t_watch0)                   ! 2017.03.02
@@ -372,195 +410,232 @@ if ( ierr .ne. 0 ) goto 999 ! 2022.10.14
    freq_tot_ip = g_freq_joint%freq_tot_ip(i,ip) ! 2022.10.20
    i_act       = g_freq_joint%i_act_ip(i,ip)    ! 2022.10.20
    i_mt        = g_freq_joint%i_mt_ip(i,ip)     ! 2022.10.20
-   ACT = .false. ;  MT = .false.                !  2022.10.20
+   ACT = .false. ;  MT = .false.                ! 2022.10.20
    if ( i_act > 0 ) ACT=.true.                  ! 2022.10.20
    if ( i_mt  > 0 ) MT=.true.                   ! 2022.10.20
    if ( freq_tot_ip .lt. 0. ) cycle             ! 2022.10.20
-   write(*,10) " ip =",ip,"/",np," freq =",freq_tot_ip," [Hz] start!!"     
+   write(*,'(a,i2)') "--------------------------------------------------- ite =",ite ! 2022.12.05
+   write(*,10) "  ip =",ip," /",np," freq =",freq_tot_ip," [Hz] start!!"
+   write(*,'(3(a,i3))')"  i     =",i,    " /",nfreq_tot_ip," | ip =",ip ! 2022.12.05    
+   write(*,'(3(a,i3))')"  i_mt  =",i_mt, " /",g_freq_joint%nfreq_mt_ip(ip)," | ip =",ip!2022.12.05    
+   write(*,'(3(a,i3))')"  i_act =",i_act," /",g_freq_joint%nfreq_act_ip(ip)," | ip =",ip!2022.12.05    
+   write(*,'(a)') "-----------------------------------------------------------" ! 2022.12.05
   
   omega=2.d0*pi*freq_tot_ip ! 2022.01.04
 
 !#[21]## COND3DTO2D : set 2D conductivity at four side surfaces
-  if (MT) then ! 2022.10.14 only for MT case
+   if (MT) then ! 2022.10.14 only for MT case
      CALL COND3DTO2D(g_mesh,g_surface,h_cond) ! see m_surface_type.f90 2021.12.30
      do j=2,5 ! surface 2DTM loop, 2:north,3:west,4:south,5:east surface
-        CALL forward_2DTM(g_surface(j),freq_tot_ip,g_param_mt,h_cond,ip,j)!## solve 2DTM for BC
+       CALL forward_2DTM(g_surface(j),freq_tot_ip,g_param_mt,h_cond,ip,j)!## solve 2DTM for BC
        if (ip .eq. 0 .and. .false. ) then ! 2D*.dat
        write(num,'(i1)') j
        open(1,file="2D"//num//".dat")
-       write(1,'(i4,2g15.7)') (k,g_surface(j)%bs(k),k=1,g_surface(j)%nline)
+         write(1,'(i4,2g15.7)') (k,g_surface(j)%bs(k),k=1,g_surface(j)%nline)
        close(1)
        end if
      end do ! end surface loop
    end if ! 2022.10.14
 
 !#[22]## 3D ACTIVE and MT forward and obtain [fs], [fs_mt], [ut] and [ut_mt] 
-   CALL forward_joint(ACT,MT,A,g_mesh,g_line,g_surface,nline,nsr_inv,fs,fs_mt,&
+   CALL forward_joint(ACT,MT,TIP,A,g_mesh,g_line,g_surface,nline,nsr_inv,fs,fs_mt,&
       & omega,sparam,g_param,g_param_joint,h_cond,PT,PT_mt,ut,ut_mt,ip,np)!2020.12.30
    if (ip .eq. 0 .and. i .eq. 1 .and. .false.) then ! fs_mt01.dat
      open(1,file="fs_mt01.dat")
      write(1,'(i6,4f15.7)') (j,fs_mt(j,1:2),j=1,nline)
      close(1)
      end if
-     fp=0.d0 ! 2018.06.25
-
-   !  write(6,*)fs(800000,1),fs_mt(800000,1),"fs!!!!!!"
+   fp=0.d0 ! 2018.06.25
 
 !#[23]## cal ACTIVE resp  [resp5]
   if(ACT) CALL CALOBSEBCOMP(fp,fs,nline,nsr_inv,omega,coeffobs,resp5(:,:,i_act),g_param_joint)
 
 !#[24]## cal MT response  [resp5_mt] and [imp_mt]
   !# cal E and B at obs
-  if(MT ) CALL CALOBSEBCOMP_MT(fs_mt,nline,2,omega,coeffobs_mt,resp5_mt(:,:,i_mt)) !see below
+  if(MT ) CALL CALOBSEBCOMP_MT(fs_mt,nline,2,omega,coeffobs_mt,resp5_mt(:,:,i_mt),ip) !see below
   !# cal MT impedance
-  if(MT ) CALL CALRESPMT( resp5_mt(:,1:2,i_mt),imp_mt(i_mt),omega ) ! 2022.01.02
+  if(MT ) CALL CALRESPMT( resp5_mt(:,1:2,i_mt),imp_mt(i_mt),omega,ip) ! 2022.12.05
+  if(TIP) CALL CALRESPTIP(resp5_mt(:,1:2,i_mt),tip_mt(i_mt),omega,ip) ! 2023.12.23
 
 !#[25]## generate d|amp|dm and d(pha)dm for jacobian
-  if(ACT) CALL genjacobian1(nobs_act,nline,nsr_inv,ut,fs,PT,h_model,g_mesh,g_line,&
+  if(ACT) then
+     CALL genjacobian1(nobs_act,nline,nsr_inv,ut,fs,PT,h_model,g_mesh,g_line,&
                   &  omega,g_apdm(i_act),g_param_joint,ip,np)     ! 2022.10.20
-  if(MT ) CALL genjacobian1_mt(nobs_mt,nline,ut_mt,fs_mt,PT_mt,h_model,g_mesh,&
-                  &g_line,omega,g_mtdm(i_mt),g_param_joint,ip,np) !2022.10.20
-              
+  end if
+  if(MT ) then
+     !write(*,'(a,i2)') " ### genjacobian1_mt st main ###  ip =",ip ! commented out 2025.07.31
+     if ( (ip == 4 .or. ip == 1)  .and. .false. ) then
+       write(*,'(2(a,i8))')     "    nobs_mt",nobs_mt,    " | ip =",ip
+       write(*,'(2(a,i8))')     "      nline",nline,      " | ip =",ip
+       write(*,'(2(a,i8))')     "size(fs_mt)",size(fs_mt)," | ip =",ip
+       write(*,'(2(a,i8))')     "size(ut_mt)",size(ut_mt)," | ip =",ip
+       write(*,'(2(a,i8))')     "size(PT_mt)",size(PT_mt)," | ip =",ip
+       write(*,'(a,f8.3,a,i8)') "      omega",omega,      " | ip =",ip
+       write(*,'(2(a,i8))')     "       i_mt",i_mt,       " | ip =",ip
+       write(*,'(2(a,i2),a,i8)')     "ip",ip,"np",np," | ip =",ip
+       end if
+       
+     CALL genjacobian1_mt(TIP,nobs_mt,nline,ut_mt,fs_mt,PT_mt,h_model,g_mesh,&
+                  &g_line,omega,g_mtdm(i_mt),g_tipdm(i_mt),g_param_joint,ip,np) !ut_mt(5) is used for tipper jacobian 2026.03.02
+     !write(*,'(a,i2)') " ### genjacobian1_mt end main ###  ip =",ip ! commented out 2025.07.31
+  end if!                                            |###
+  !write(*,'(a,i2)') " ### genjacobian1 and *_mt end!! ### ip =",ip! 2025.07.31
   end do ! nfreq_tot_ip loop end
 
-if (ip .eq. 0 .and. MT  ) then ! 2022.10.14
-  open(1,file="dzxxdm1_before.dat")
-  call complexcrsout(g_mtdm(1)%dzxxdm,1) !m_matrix.f90
-  close(1)
-  open(1,file="dzxydm1_before.dat")
-  call complexcrsout(g_mtdm(1)%dzxydm,1) !m_matrix.f90
-  close(1)
+!# check jacobian ! false is added 2023.12.23
+  if (ip .eq. 0 .and. MT  .and. .false. ) then ! false is added 2023.12.23
+   open(1,file="dzxxdm1_before.dat")
+     call complexcrsout(g_mtdm(1)%dzxxdm,1) !m_matrix.f90
+   close(1)
+   open(1,file="dzxydm1_before.dat")
+     call complexcrsout(g_mtdm(1)%dzxydm,1) !m_matrix.f90
+   close(1)
   end if
 
 !============================================================= freq loop end
-  call setnec(ijoint,ACT,MT) ! ip where freq is not assigned is also necessary for MPI share
 
 !#[26]## GATHER ACTIVE and MT results to ip = 0
-  if(ACT)CALL SENDRECVRESULT(resp5,tresp,ip,np,nfreq_act,nfreq_act_ip,g_freq_joint,nsr_inv) 
-  if(ACT)CALL SENDBZAPRESULT_AP(g_apdm,gt_apdm,nobs_act,nfreq_act,nfreq_act_ip,g_freq_joint,nsr_inv,ip,np,g_param_joint)
-  if(MT) CALL SENDRECVIMP(imp_mt,timp_mt,ip,np,nfreq_mt,nfreq_mt_ip,g_freq_joint)! 2022.01.02
-  if(MT) CALL SENDRESULTINV_MT(g_mtdm,gt_mtdm,nobs_mt,nfreq_mt,nfreq_mt_ip,g_freq_joint,ip,np,g_param_joint) ! 2022.01.05
-
+  call setnec(g_param_joint,ACT,MT,TIP) ! set ACT, MT, TIP before sending results
+  if(ACT) CALL SENDRECVRESULT(resp5,tresp,ip,np,nfreq_act,nfreq_act_ip,g_freq_joint,nsr_inv) 
+  if(ACT) CALL SENDBZAPRESULT_AP(g_apdm,gt_apdm,nobs_act,nfreq_act,nfreq_act_ip,g_freq_joint,nsr_inv,ip,np,g_param_joint)
+  !call MPI_BARRIER(mpi_comm_world, errno) ! 2026.03.04 for debug
+  if(MT)  CALL SENDRECVIMP(imp_mt,timp_mt,ip,np,nfreq_mt,nfreq_mt_ip,g_freq_joint)! 2022.01.02
+  if(MT)  CALL SENDRESULTINV_MT(g_mtdm,gt_mtdm,nobs_mt,nfreq_mt,nfreq_mt_ip,g_freq_joint,ip,np,g_param_joint) ! 2022.01.05
+  if(TIP) CALL SENDRECVTIP(tip_mt,ttip_mt,ip,np,nfreq_mt,nfreq_mt_ip,g_freq_joint)!2023.12.25
+  if(TIP) CALL SENDRESULTINV_TIP(g_tipdm,gt_tipdm,nobs_mt,nfreq_mt,nfreq_mt_ip,g_freq_joint,ip,np,g_param_joint)
   CALL MPI_BARRIER(mpi_comm_world, errno) ! 2017.09.03
 
-!#[27]## OUTPUT ACTIVE and MT responsed for ite=============================  ip=0 start
-  if ( ip .eq. 0 ) then
+!#[27]## OUTPUT ACTIVE and MT responses for ite==================  ip=0 start
+ if ( ip .eq. 0 ) then
    if(ACT)CALL OUTOBSFILESINV(g_param,g_param_joint,nsr_inv,sparam,tresp,nfreq_act,ite,ialpha)!2017.09.11
    if(MT )CALL OUTOBSFILESINV_MT(g_param_mt,g_param_joint,timp_mt,nfreq_mt,ite,ialpha)
+   if(TIP)CALL OUTOBSFILESINV_TIP(g_param_mt,g_param_joint,ttip_mt,nfreq_mt,ite,ialpha) ! 2023.12.25
+   !#[28]## gen dvec
+     if(ACT)CALL GENDVEC_AP(g_param_joint,nsr_inv,tresp,nfreq_act,h_data,g_data) ! 2018.10.08 [h_data]
+     if(MT )CALL GENDVEC_MT(g_param_joint,timp_mt,nfreq_mt,h_data_mt) ! 2022.01.04 [h_data_mt]
+     if(TIP)CALL GENDVEC_TIP(g_param_joint,ttip_mt,nfreq_mt,h_data_mt) !2023.12.25[h_data_mt]
 
-!#[28]## gen dvec
-   if(ACT)CALL GENDVEC_AP(g_param_joint,nsr_inv,tresp,nfreq_act,h_data,g_data) ! 2018.10.08 [h_data]
-   if(MT )CALL GENDVEC_MT(g_param_joint,timp_mt,nfreq_mt,h_data_mt) ! 2022.01.04 [h_data_mt]
+   !#[29]## cal rms and misfit term ! 2022.01.02
+     if(ACT)CALL CALRMS_AP( g_data,h_data,Cd,misfit,nrms)   ! cal rms, 2017.09.08
+     if(MT )CALL CALRMS_MT( g_data_mt,h_data_mt,Cd_mt,misfit_mt,nrms_mt)   !2022.01.04
+     if(TIP)CALL CALRMS_TIP(g_data_mt,h_data_mt,Cd_tip,misfit_tip,nrms_tip)!2023.12.25
+     if ( ACT .and. ite .eq. 1 ) nrms_ini     = nrms    ! 2022.10.14
+     if ( MT  .and. ite .eq. 1 ) nrms_mt_ini  = nrms_mt ! 2022.10.14
+     if ( TIP .and. ite .eq. 1 ) nrms_tip_ini = nrms_tip! 2023.12.25
+   !#[30]## cal roughness 2018.01.22
+     call CALROUGHNESS(g_param_joint,h_model,g_model_ref,rough1,rough2,BM,R) !m_modelroughenss
 
-!#[29]## cal rms and misfit term ! 2022.01.02
-   if(ACT)CALL CALRMS_AP(g_data,h_data,Cd,misfit,nrms)   ! cal rms, 2017.09.08
-   if(MT )CALL CALRMS_MT(g_data_mt,h_data_mt,Cd_mt,misfit_mt,nrms_mt)   !2022.01.04
-   if ( ACT .and. ite .eq. 1 ) nrms_ini    = nrms    ! 2022.10.14
-   if ( MT  .and. ite .eq. 1 ) nrms_mt_ini = nrms_mt ! 2022.10.14
-
-!#[30]## cal roughness 2018.01.22
-   call CALROUGHNESS(g_param_joint,h_model,g_model_ref,rough1,rough2,BM,R) !m_modelroughenss
-
-!#[31]## check RMS and set alpha
+   !#[31]## check RMS and set alpha
     !#[1]## output misfit and nrms
     frms = g_param_joint%finalrms  ! 2018.06.25
     if ( frms .lt. 0.1  ) frms=1.0 ! 2018.06.25
-    if ( nrms .lt. frms .and. nrms_mt .lt. frms) then     ! 2018.06.25
-     if (ACT) call OUTRMS(21,ite,nrms,misfit,alpha,rough1,rough2,1) !converged  2017.09.08
-     if (MT)  call OUTRMS(22,ite,nrms_mt,misfit_mt,alpha,rough1,rough2,1)!converged  2017.09.08
+    if ( nrms < frms .and. nrms_mt < frms .and. nrms_tip < frms ) then  ! 2026.03.11 nrms_tip is added 
+     if (ACT) call OUTRMS(    21,ite,nrms,misfit,        alpha,rough1,rough2,1) !Converged  2017.09.08
+     if (MT)  call OUTRMS_MT( 22,ite,nrms_mt,misfit_mt,  alpha,rough1,rough2,1) !converged  2017.09.08
+     if (TIP) call OUTRMS_TIP(23,ite,nrms_tip,misfit_tip,alpha,rough1,rough2,1) !Converged  2026.03.11
      iflag = 1 ;  goto 80                           ! iflag = 1 means "end" 2017.12.20
-  else
-     if (ACT) call OUTRMS(21,ite,nrms,misfit,alpha,rough1,rough2,0) ! Not converged  2017.09.08
-     if (MT ) call OUTRMS(22,ite,nrms_mt,misfit_mt,alpha,rough1,rough2,0)!Not converged22.01.04
-  end if
+    else
+     if (ACT) call OUTRMS(    21,ite,nrms,misfit,        alpha,rough1,rough2,0) !Not converged 17.09.08
+     if (MT ) call OUTRMS_MT( 22,ite,nrms_mt,misfit_mt,  alpha,rough1,rough2,0) !Not converged 22.01.04
+     if (TIP )call OUTRMS_TIP(23,ite,nrms_tip,misfit_tip,alpha,rough1,rough2,0) !Not converged
+    end if
+    
+     call warningstop()  !see below if nrsm eceeded the initial nrms when it > 1, inversion will stop 2025.09.19
+     if ( iflag ==1 ) goto 80 ! 2025.09.19
 
-    if ( ite .ge. 2 .and. nrms_ini .lt. nrms ) then ! 2018.01.25 stop when nrms is larger
-     iflag = 1 ; goto 80                            ! 2018.01.25
-  end if
+     if (ite == 1) call setinitialrms(nrms0,nrms_mt0,nrms_tip0,nrms,nrms_mt,nrms_tip) ! see below 2025.09.19
 
-  ! 2018.01.25
+    !#[32]## [Option]## if nrms increased, replace the reference model
+     if ( iflag_replace .eq. 1 .and. ialphaflag .eq. 2 ) then ! cooling strategy
+       if ((nrms     / nrms0     > 1.0 .and. nrms     > frms ) .or.&
+           (nrms_mt  / nrms_mt0  > 1.0 .and. nrms_mt  > frms ) .or.&
+           (nrms_tip / nrms_tip0 > 1.0 .and. nrms_tip > frms )) then !  2025.09.19
+           g_model_ref = pre_model ! replace the reference model by previous model
+           h_model     = pre_model ! replace the initial   model by previous model
+           if (ACT) nrms0     = nrms0     * 1.1  ! 2024.08.30
+           if (MT)  nrms_mt0  = nrms_mt0  * 1.1  ! 2024.08.30
+           if (TIP) nrms_tip0 = nrms_tip0 * 1.1  ! 2024.08.30
+           goto 80
+       end if
+     end if
 
-!#[32]## [Option]## if nrms increased, replace the reference model
-     if ( g_param_joint%iflag_replace .eq. 1 ) then ! 2018.06.26
-     if ( ite .eq. 1 ) nrms0 = nrms/0.9             ! initial     2018.06.26
-     if ( nrms/nrms0 .gt. 1.0  ) then               !             2018.06.26
-      if (g_param_joint%ialphaflag    .eq. 2 ) then ! cooling strategy 2017.07.19
-      g_model_ref = pre_model
-      h_model     = pre_model
-      goto 80
-      end if
-     end if; end if
-
-!-------------------------------------------------------- followings are for next model
+   !-------------------------------------------------------- followings are for next model
     ! ialphaflag = 1 : L-curve method
     ! ialphaflag = 2 : cooling with given alpha0
     ! ialphaflag = 3 : cooling with automatic alpha0 (Minami et al. 2018)
 
-!#[33]## Generate BMI for next model : see m_modelroughenss.f90
+   !#[33]## Generate BMI for next model : see m_modelroughenss.f90
     if (      itype_roughness .eq. 2 ) then ! MS:  Minimum support
      call GENBMI_MS( h_model,g_model_ref,g_param_joint,BM,BMI,ite,ialphaflag)! 2017.12.25
     else if ( itype_roughness .eq. 3 ) then ! MSG: Minimum support gradient
      call GENBMI_MSG(h_model,g_model_ref,g_param_joint,R,RI,BM,BMI,ite,ialphaflag) ! 2017.12.25
     end if
 
-!#[34]## generate JJ (jacobian)
+   !#[34]## generate JJ (jacobian)
     if(ACT)call genjacobian2(g_param_joint,nfreq_act,gt_apdm,JJ) !m_jacobian_joint.f90 2017.12.11
-    if(MT )call genjacobian2_MT(g_param_joint,nfreq_mt,gt_mtdm,JJ_mt) ! m_jacobian_joint.f90 2022.01.05
-
+    if(MT )call genjacobian2_MT(TIP,g_param_joint,nfreq_mt,gt_mtdm,gt_tipdm,JJ_mt,JJ_tip) ! m_jacobian_joint.f90 2022.01.05
+    
     if ( ACT .and. g_param_joint%ioutlevel .eq. 1 ) then  ! 2018.06.25
-     CALL OUTJACOB(g_param_joint,JJ,ite,h_model,g_param,sparam)!m_jacobian_joint.f90 2018.06.25
+     CALL GENMODELVOLUME(h_model,g_mesh) !see ../src_inv/m_modelpart.f90 2022.11.01
+     CALL OUTJACOB(g_param_joint,g_data,JJ,ite,h_model,g_param,sparam)!m_jacobian_joint.f90 2018.06.25
     end if                                      ! 2018.06.25
 
     if ( ACT .and. g_param_joint%iboundflag .eq. 2) then ! 2018.01.22 J -> J'
      call TRANSJACOB(g_param_joint,JJ,h_model) ! 2018.01.22 m_jacobian_joint.f90
     end if
 
-!#[35]# Initial alpha
-    if ( ite == 1 ) then   ! 2017.12.13
-     if ( ialphaflag .eq. 1 ) alpha = g_param_joint%alpha(ialpha)! 2017.12.13
-     if ( ialphaflag .eq. 2 ) alpha = g_param_joint%alpha_init   ! 2017.12.13
-     if ( ialphaflag .eq. 3 ) then  ! 2017.12.13 Minami et al. (2018) cooling
-      kmax = 30
+   !#[35]# Initial alpha
+     if ( ite == 1 ) then   ! 2017.12.13
+       if ( ialphaflag .eq. 1 ) alpha = g_param_joint%alpha(ialpha)! 2017.12.13
+       if ( ialphaflag .eq. 2 ) alpha = g_param_joint%alpha_init   ! 2017.12.13
+       if ( ialphaflag .eq. 3 ) then  ! 2017.12.13 Minami et al. (2018) cooling
+         kmax = 30
+         ! call alphaspectralradius_v1(Cd,JJ,BM,alpha,kmax)   ! 2017.12.25 m_spectral.f90
+         if (      itype_roughness .eq. 3 ) then            ! MSG 2018.01.18
+           call alphaspectralradius_v2(Cd,JJ,RI,alpha,kmax)  ! 2018.01.18 m_spectral.f90
+         else if ( itype_roughness .eq. 2 ) then            ! MS  2018.02.04
+           call alphaspectralradius_v2(Cd,JJ,BMI,alpha,kmax) ! 2018.01.18 m_spectral.f90
+           alpha = alpha * (g_param_joint%beta**2.)          ! 2018.02.04
+         else                                               ! 2018.02.04
+           call alphaspectralradius_v2(Cd,JJ,BMI,alpha,kmax) ! 2017.12.24 m_spectral.f90
+	       end if
+         alpha = g_param_joint%gamma*alpha                   ! 2017.12.21
+       end if                                               ! 2017.12.11
+     end if
 
-     ! call alphaspectralradius_v1(Cd,JJ,BM,alpha,kmax)   ! 2017.12.25 m_spectral.f90
-       if (      itype_roughness .eq. 3 ) then            ! MSG 2018.01.18
-        call alphaspectralradius_v2(Cd,JJ,RI,alpha,kmax)  ! 2018.01.18 m_spectral.f90
-       else if ( itype_roughness .eq. 2 ) then            ! MS  2018.02.04
-        call alphaspectralradius_v2(Cd,JJ,BMI,alpha,kmax) ! 2018.01.18 m_spectral.f90
-        alpha = alpha * (g_param_joint%beta**2.)          ! 2018.02.04
-       else                                               ! 2018.02.04
-        call alphaspectralradius_v2(Cd,JJ,BMI,alpha,kmax) ! 2017.12.24 m_spectral.f90
-	 end if
-      alpha = g_param_joint%gamma*alpha                   ! 2017.12.21
-     end if                                               ! 2017.12.11
-    end if
+   !#[36]## New alpha for cooling strategies
+     if ( ite .ge. 2 ) then   ! 2017.12.13
+       if ( ialphaflag .eq. 2 .or. ialphaflag .eq. 3 ) then !== cooling strategy
+          ! 2025.09.19 any one of ACT, MT, TIP meets the condition results in alpha being updated
+          if ( (ACT .and. nrms/nrms0        > 0.9 .and. nrms > frms ) .or. &
+               ( MT  .and. nrms_mt/nrms_mt0  > 0.9 .and. nrms_mt > frms) .or. &
+               ( TIP .and. nrms_tip/nrms_tip0 > 0.9 .and. nrms_tip > frms)) then
+                alpha = alpha*(10.**(g_param_joint%alpha_factor)) ! 2025.09.25 
+          end if
+       end if ! if ialphaflag = 2 or 3
+     end if ! 2017.12.13
+     if ( ialphaflag .eq. 4 ) then ! Modified version of Grayver et al. (2013)
+	     call alphaspectralradius_v2(Cd,JJ,BMI,alpha,30) ! 2018.01.09 m_spectral.f90
+       alpha = g_param_joint%gamma*alpha/(1.*ite) ! 2018.01.09
+     end if ! 2018.09.01
 
-!#[36]## New alpha for cooling strategies
-    if ( ite .ge. 2 ) then   ! 2017.12.13
-     if ( ialphaflag .eq. 2 .or. ialphaflag .eq. 3 ) then !== cooling strategy
-      if ( nrms/nrms0 .gt. 0.9  ) alpha = alpha*(10.**(-1./3.d0))
-     end if ! if ialphaflag = 2 or 3
-    end if ! 2017.12.13
-    if ( ialphaflag .eq. 4 ) then ! Modified version of Grayver et al. (2013)
-	call alphaspectralradius_v2(Cd,JJ,BMI,alpha,30) ! 2018.01.09 m_spectral.f90
-      alpha = g_param_joint%gamma*alpha/(1.*ite) ! 2018.01.09
-    end if ! 2018.09.01
-
-!#[37]## obtain new model
+   !#[37]## obtain new model
     pre_model = h_model ! 2017.06.14 keep previous model
-    call getnewmodel_joint(JJ,JJ_mt,g_model_ref,h_model,g_data,h_data,&
-    &   g_data_mt,h_data_mt,BMI,CD,CD_mt,alpha,g_param_joint) ! 2022.01.05
-    nrms0 = nrms                                 !  2017.12.25
+    call getnewmodel_joint(JJ,JJ_mt,JJ_tip,g_model_ref,h_model,g_data,h_data,&
+    &   g_data_mt,h_data_mt,BMI,CD,CD_mt,CD_tip,alpha,g_param_joint) ! 2026.03.03
 
-  80 continue                                    !  2017.12.20
+    !#[38]## update nrms0, nrms_mt0, nrms_tip0, 1.d-4 is added to each to avoid division by zero when nrms is very small 2026.03.11
+    if (ACT) nrms0     = nrms    +1.d-4     !  2026.03.11
+    if (MT)  nrms_mt0  = nrms_mt +1.d-4     !  2026.03.11
+    if (TIP) nrms_tip0 = nrms_tip+1.d-4     !  2026.03.11
+    80 continue                                    !  2017.12.20
 
   end if ! ip = 0
 
-   CALL MPI_BARRIER(mpi_comm_world, errno)
-   CALL MPI_BCAST(iflag,1,MPI_INTEGER4,0,mpi_comm_world,errno)
-   if (iflag .eq. 1) goto 100
+  CALL MPI_BCAST(iflag,1,MPI_INTEGER4,0,mpi_comm_world,errno)
+  if (iflag .eq. 1) goto 100
 
-!#[38]## Share new model
+ !#[38]## Share new model
    CALL SHAREMODEL(h_model,ip) ! see m_shareformpi.f90, 2017.06.05
 
    if ( ip .eq. 0) call watchstop(t_watch0)
@@ -569,7 +644,11 @@ if (ip .eq. 0 .and. MT  ) then ! 2022.10.14
 end do ! iteration loop============================================  iteration end!
 
  100 continue
- if ( ip .eq. 0 ) close(21) ! 2017.05.18
+ if ( ip .eq. 0 ) then ! 2023.12.25
+   if (ACT) close(21)
+   if (MT)  close(22)
+   if (TIP) close(23)
+ end if
  if ( ip .eq. 0 ) then
   call watchstop(t_watch)   ! 2017.09.11
   write(*,'(a,g15.7,a,f15.7,a)') "### END alpha=",alpha," Time=",t_watch%time," [min]" !2022.1.2
@@ -581,13 +660,133 @@ end do ! alpha loop end! 2017.09.08
 
  CALL MPI_FINALIZE(errno) ! 2017.06.05
 
+ call watchstop(t_watch1)  ! 2025.09.18
+ if (ip == 0) write(*,'(2(a,i2),a,f6.3,a)') " ### inv_joint END!! ### Time =",t_watch%ihour,"h ",t_watch%imin,"m ",t_watch%sec,"s"  ! 2025.09.18
 
- 10 format(a,i3,a,i3,a,f9.4,a) !2022.01.04
+ 10 format(a,i3,a,i3,a,f8.3,a) !2022.01.04
+
+contains
+!###################################################################
+! 2025.09.19
+subroutine setinitialrms(nrms0,nrms_mt0,nrms_tip0,nrms,nrms_mt,nrms_tip)
+implicit none
+real(8), intent(in)  :: nrms,nrms_mt,nrms_tip
+real(8), intent(out) :: nrms0,nrms_mt0,nrms_tip0
+       ! nrms0 is used for juding cooling and replacing model
+          nrms0     = nrms     / 0.9 + 0.01    ! initial     2018.06.26
+          nrms_mt0  = nrms_mt  / 0.9 + 0.01    ! initial     2018.06.26
+          nrms_tip0 = nrms_tip / 0.9 + 0.01    ! initial     2018.06.26
+return
+end subroutine
+!################################################################### warningstop
+! 2025.09.19
+subroutine warningstop()
+  implicit none
+     iflag=0
+     if ( ite == 1 ) return
+     if ( ACT .and. frms < nrms .and. nrms_ini < nrms ) then ! 2024.08.30 stop when nrms is larger
+       write(*,*) "GEGEGE, rms exceeded the initial rms under the current inversion setting "!2022.10.31
+       write(*,*) "Consider of changing the current inversion setting " ! 2022.10.31
+       iflag = 1 ! goto 80                            ! 2018.01.25
+     end if                                          ! 2018.01.25
+     if ( MT  .and. frms < nrms_mt .and. nrms_mt_ini < nrms_mt ) then !  stop when nrms is larger
+       write(*,*) "GEGEGE, rms_mt exceeded the initial rms under the current inversion setting "!2022.10.31
+       write(*,*) "Consider of changing the current inversion setting " ! 2022.10.31
+       iflag = 1 ! goto 80                            ! 2018.01.25
+     end if                                          ! 2018.01.25
+     if ( TIP .and. frms < nrms_tip .and. nrms_tip_ini < nrms_tip  ) then !  stop when nrms is larger
+       write(*,*) "GEGEGE, rms_tip exceeded the initial rms under the current inversion setting "!2022.10.31
+       write(*,*) "Consider of changing the current inversion setting " ! 2022.10.31
+       iflag = 1 ! goto 80                            ! 2018.01.25
+     end if                                          ! 2018.01.25
+return
+end subroutine
+!###################################################################
+! modified for spherical on 2016.11.20
+! iflag = 0 for xyz
+! iflag = 1 for xyzspherical
+subroutine GENXYZMINMAX_MT(em_mesh,g_param_mt)
+use param_mt ! 2016.11.20
+use mesh_type
+implicit none
+type(mesh),            intent(inout) :: em_mesh ! 2021.10.13
+type(param_forward_mt),intent(inout) :: g_param_mt ! 2021.12.15
+real(8) :: xmin,xmax,ymin,ymax,zmin,zmax
+real(8) :: xyzminmax(6)
+real(8), allocatable, dimension(:,:) :: xyz ! 2025.07.15
+integer(4) :: i
+allocate(xyz(3,em_mesh%node))   ! 2025.07.15
+xyz = em_mesh%xyz ! normal
+xmin=xyz(1,1) ; xmax=xyz(1,1)
+ymin=xyz(2,1) ; ymax=xyz(2,1)
+zmin=xyz(3,1) ; zmax=xyz(3,1)
+
+do i=1,em_mesh%node
+ xmin=min(xmin,xyz(1,i))
+ xmax=max(xmax,xyz(1,i))
+ ymin=min(ymin,xyz(2,i))
+ ymax=max(ymax,xyz(2,i))
+ zmin=min(zmin,xyz(3,i))
+ zmax=max(zmax,xyz(3,i))
+end do
+
+write(*,*) "xmin,xmax",xmin,xmax ! 2021.10.13
+write(*,*) "ymin,ymax",ymin,ymax ! 2021.10.13
+write(*,*) "zmin,zmax",zmin,zmax ! 2021.10.13
+
+xyzminmax(1:6)=(/xmin,xmax,ymin,ymax,zmin,zmax/)
+
+!# set output
+g_param_mt%xyzminmax = xyzminmax ! 2021.12.15
+em_mesh%xyzminmax = xyzminmax    ! 2021.10.13
+
+write(*,*) "### GENXYZMINMAX END!! ###"
+return
+end
+
+!############################################ OUTSITEINFO 
+! coded on 2025.09.18
+subroutine OUTSITEINFO(g_param,sparam,g_param_mt,g_param_joint,ACT,MT)
+implicit none
+type(param_forward),       intent(in) :: g_param
+type(param_source),        intent(in) :: sparam
+type(param_forward_mt),    intent(in) :: g_param_mt
+type(param_joint),         intent(in) :: g_param_joint
+logical,                   intent(in) :: ACT,MT
+integer(4) :: i
+
+if (ACT) then
+  !# site info for ACTIVE
+  open(1,file=trim(g_param_joint%outputfolder)//"site_act.dat")
+  do i=1,g_param%nobs 
+    write(1,'(3f15.7,1x,a)') g_param%xyzobs(1:3,i),trim(g_param%obsname(i))
+  end do
+  close(1)
+
+  !# source info for ACTIVE
+  do i=1,sparam%nsource
+    open(1,file=trim(g_param_joint%outputfolder)//trim(sparam%sourcename(i))//"_site.dat")
+    write(1,'(3f15.7,1x,a)') sparam%xs1(1:3,i)
+    write(1,'(3f15.7,1x,a)') sparam%xs2(1:3,i)
+    close(1)
+  end do
+
+end if
+
+if (MT) then
+  !# site info for MT
+  open(1,file=trim(g_param_joint%outputfolder)//"site_mt.dat")
+  do i=1,g_param_mt%nobs
+    write(1,'(3f15.7,1x,a)') g_param_mt%xyzobs(1:3,i),trim(g_param_mt%obsname(i))
+  end do
+  close(1)
+end if
+end subroutine
 
 end program inversion_joint ! 2021.12.25
 
 !############################################# LINKglobalmodel2surface
- subroutine linkglobalmodel2surface(g_model,g_surface)
+subroutine linkglobalmodel2surface(g_model,g_surface)
   use surface_type
   use modelroughness
   use modelpart
@@ -611,12 +810,13 @@ end program inversion_joint ! 2021.12.25
  return
  end 
 !#############################################
-! coded on 2021.09.15
-subroutine calrespmt(resp5,resp_mt,omega)
+subroutine calrespmt(resp5,resp_mt,omega,ip) ! 2022.12.05
+ ! coded on 2021.09.15
   use outresp
   use constants ! dmu,pi
   implicit none
   real(8),       intent(in)    :: omega
+  integer(4),    intent(in)    :: ip     ! 2022.12.05
   type(respdata),intent(in)    :: resp5(5,2) ! 1 for ex, 2 for ey polarization
   type(respmt),  intent(inout) :: resp_mt
   complex(8),    allocatable   :: be5_ex(:,:),be5_ey(:,:) ! be5 = bx,by,bz,ex,ey
@@ -627,7 +827,6 @@ subroutine calrespmt(resp5,resp_mt,omega)
   
   nobs = resp_mt%nobs
   allocate(be5_ex(5,nobs),be5_ey(5,nobs))
-  
   ! calculate impedance Z = E/B [mV/km]/[nT]
   ! (Ex_ex Ex_ey) = (Zxx Zxy)(Bx_ex Bx_ey)
   ! (Ey_ex Ey_ey) = (Zyx Zyy)(By_ex By_ey)
@@ -635,10 +834,14 @@ subroutine calrespmt(resp5,resp_mt,omega)
   !  Z = [E][B]^-1
   
   !# set bxyzexy_ex and bxyzexy_ey
-  do j=1,nobs
-   do i=1,5
-    be5_ex(i,j)=resp5(i,1)%ftobs(j) ! ex polarization
-    be5_ey(i,j)=resp5(i,2)%ftobs(j) ! ey plarization
+  do i=1,5
+   !    write(*,*) "allocated(resp5(i,1)%ftobs)",allocated(resp5(i,1)%ftobs)
+   !    write(*,*) "allocated(resp5(i,2)%ftobs)",allocated(resp5(i,2)%ftobs)
+   !    write(*,'(a,i3,i8,a,i3)') "i,size(resp5(i,1)%ftobs)",i,size(resp5(i,1)%ftobs),"ip",ip
+   !    write(*,'(a,i3,i8,a,i3)') "i,size(resp5(i,2)%ftobs)",i,size(resp5(i,2)%ftobs),"ip",ip
+   do j=1,nobs
+     be5_ex(i,j)=resp5(i,1)%ftobs(j) ! ex polarization
+     be5_ey(i,j)=resp5(i,2)%ftobs(j) ! ey plarization
    end do
   end do
   
@@ -659,7 +862,7 @@ subroutine calrespmt(resp5,resp_mt,omega)
    resp_mt%zxy(j) = z(1,2)
    resp_mt%zyx(j) = z(2,1)
    resp_mt%zyy(j) = z(2,2)
-  ! rho and pha, rhoa = mu/omega*|Z|**2.
+  ! rho and pha, rhoa = mu/omega*|Z|**2. ! Z=[mV/km]/[nT]
   coef = dmu/omega*1.d+6
    resp_mt%rhoxx(j) = coef*amp(z(1,1))**2. ! [Ohm.m]
    resp_mt%rhoxy(j) = coef*amp(z(1,2))**2. ! [Ohm.m]
@@ -672,11 +875,68 @@ subroutine calrespmt(resp5,resp_mt,omega)
    resp_mt%phayy(j) = phase(z(2,2))
   end do
   
+  write(*,'(a,i2)') " ### CALRESPMT        END !! ###  ip =",ip  ! 2022.12.05
+  return
+  end
+!#############################################
+subroutine calresptip(resp5,resp_tip,omega,ip) ! 2023.12.23
+  ! coded on 2023.12.23
+  use outresp
+  use constants ! dmu,pi
+  implicit none
+  real(8),       intent(in)     :: omega
+  integer(4),    intent(in)     :: ip     ! 2022.12.05
+  type(respdata),intent(in)     :: resp5(5,2) ! 1 for ex, 2 for ey polarization
+  type(resptip),  intent(inout) :: resp_tip
+  complex(8),    allocatable    :: be5_ex(:,:),be5_ey(:,:) ! be5 = bx,by,bz,ex,ey
+  complex(8)                    :: a,b,c,d,iunit=(0.d0,1.d0)
+  complex(8)                    :: det,txy(2,1),bi(2,2),e(2,1)
+  integer(4)                    :: i,j,nobs
+  real(8)                       :: coef,amp,phase
+  
+  nobs = resp_tip%nobs
+  allocate(be5_ex(5,nobs),be5_ey(5,nobs))
+  ! calculate tipper Txy = Bz/(Bx, By)
+  ! (Bz_ex) = (Bx_ex By_ex) (Tx)
+  ! (Bz_ey) = (Bx_ex By_ex) (Ty)
+  ! [Bz] =[Bxy][T] 
+  ! Then, Tx and Ty are obtained by
+  ! [T] = [Bxy]^-1 [Bz]
+  !
+  !# set bxyzexy_ex and bxyzexy_ey
+  write(*,*) "nobs",nobs,"ip",ip
+  do i=1,5
+   do j=1,nobs
+     be5_ex(i,j)=resp5(i,1)%ftobs(j) ! ex polarization
+     be5_ey(i,j)=resp5(i,2)%ftobs(j) ! ey plarization
+   end do
+  end do
+  
+  write(*,*)
+  !# calculate tipper
+  do j=1,nobs
+   a = be5_ex(1,j) ! Bx_ex
+   b = be5_ex(2,j) ! By_ex ! 2022.12.25
+   c = be5_ey(1,j) ! Bx_ey ! 2023.12.25
+   d = be5_ey(2,j) ! By_ey
+   det = a*d - b*c
+   bi(1,1:2)=(/ d, -b/)
+   bi(2,1:2)=(/ -c, a/)
+   bi = bi/det
+   e(1,1)= be5_ex(3,j) ! (bz_ex)
+   e(2,1)= be5_ey(3,j) ! (bz_ey)
+   txy = matmul(bi,e)
+   resp_tip%tx(j) = txy(1,1) ! [nT]/[nT]
+   resp_tip%ty(j) = txy(2,1)
+  end do
+  
+  write(*,'(a,i2)') " ### CALRESPTIP     END !! ###  ip =",ip  ! 2023.12.23
   return
   end
 
+
 !#############################################
-  subroutine declareinversiontype(ijoint,ierr) ! 2022.10.14
+subroutine declareinversiontype(ijoint,ierr) ! 2022.10.14
   implicit none
   integer(4),intent(in)  :: ijoint
   integer(4),intent(inout) :: ierr
@@ -694,13 +954,14 @@ subroutine calrespmt(resp5,resp_mt,omega)
   return
   end
 !#############################################
-!# copied from ../src_3DMT/n_ebfem_3DMT.f90
-subroutine CALOBSEBCOMP_MT(fs,nline,nsr,omega,coeffobs,resp5) ! fp,fs -> ft 2021.09.14
+subroutine CALOBSEBCOMP_MT(fs,nline,nsr,omega,coeffobs,resp5,ip) ! 2022.12.05
+  !# copied from ../src_3DMT/n_ebfem_3DMT.f90
   use matrix
   use outresp
   implicit none
   real(8),              intent(in)    :: omega
   integer(4),           intent(in)    :: nline, nsr
+  integer(4),           intent(in)    :: ip ! 2022.12.05
   complex(8),           intent(inout) :: fs(nline,nsr) ! 2017.07.11
   type(real_crs_matrix),intent(in)    :: coeffobs(2,3)
   type(respdata),       intent(inout) :: resp5(5,nsr)                 !2017.07.11
@@ -715,14 +976,14 @@ subroutine CALOBSEBCOMP_MT(fs,nline,nsr,omega,coeffobs,resp5) ! fp,fs -> ft 2021
    CALL CALOBSRESP_3DMT(fs(:,i),nline,coeffobs(1,2),resp5(5,i)  ) !ey,fp deleted 2021.09.15
   end do      ! 2017.07.11
   
-  write(*,*) "### CALOBSEBCOMP_MT END!! ###" ! 2017.07.12
+  write(*,'(a,i2)') " ### CALOBSEBCOMP_MT  END !! ###  ip =",ip ! 2022.12.05
   
   return
   end
 
 !#################################################### PREPAREPT
-!# PT [nobs,nline]*ncomp is generated 2021.12.30
-subroutine PREPAREPT_JOINT(coeffobs,coeffobs_mt,g_param_joint,PT,PT_mt) ! 2021.12.30
+subroutine PREPAREPT_JOINT(coeffobs,coeffobs_mt,g_param_joint,PT,PT_mt) 
+ !# PT [nobs,nline]*ncomp is generated 2021.12.30
  use matrix
  use param_jointinv
  implicit none
@@ -730,7 +991,7 @@ subroutine PREPAREPT_JOINT(coeffobs,coeffobs_mt,g_param_joint,PT,PT_mt) ! 2021.1
  type(real_crs_matrix),   intent(in)  :: coeffobs(2,3)
  type(real_crs_matrix),   intent(in)  :: coeffobs_mt(2,3)
  type(reaL_crs_matrix),   intent(out) :: PT(5)        ! 2018.10.04
- type(reaL_crs_matrix),   intent(out) :: PT_mt(4)     ! 2021.12.30
+ type(reaL_crs_matrix),   intent(out) :: PT_mt(5)     ! 2023.10.23
  integer(4)                           :: iflag_comp(5)
  integer(4)                           :: i,j,icomp
 
@@ -756,11 +1017,11 @@ subroutine PREPAREPT_JOINT(coeffobs,coeffobs_mt,g_param_joint,PT,PT_mt) ! 2021.1
   CALL DUPLICATE_CRSMAT(coeffobs_mt(2,2),PT_mt(2)) !by PT(1:5) [nobs,nline] , m_matrix.f90
   CALL DUPLICATE_CRSMAT(coeffobs_mt(1,1),PT_mt(3)) !ex PT(1:5) [nobs,nline] , m_matrix.f90
   CALL DUPLICATE_CRSMAT(coeffobs_mt(1,2),PT_mt(4)) !ey PT(1:5) [nobs,nline] , m_matrix.f90
+  CALL DUPLICATE_CRSMAT(coeffobs_mt(2,3),PT_mt(5)) !bz PT(1:5) [nobs,nline] , m_matrix.f90 2023.10.23
 
  return
  end
 !#################################################### READREFINITCOND
-!# Coded on 2018.06.21
 subroutine READREFINITCOND(r_cond,h_cond,g_param_joint,g_mesh) ! 2018.10.04
  use param_jointinv ! 2018.06.21
  use modelpart
@@ -818,9 +1079,9 @@ subroutine READREFINITCOND(r_cond,h_cond,g_param_joint,g_mesh) ! 2018.10.04
  return
  end
 !##################################################### SETCOND
-!# coded on 2018.10.04
-!# case where sigmahomo is given
 subroutine setcond(h_cond,g_mesh,sigmahomo)
+ !# coded on 2018.10.04
+ !# case where sigmahomo is given
  use mesh_type
  use param     ! 2018.10.05
  implicit none
@@ -854,8 +1115,8 @@ subroutine setcond(h_cond,g_mesh,sigmahomo)
  return
  end
 !##################################################### READMODEL2COND
-!# coded on 2018.06.21
 subroutine readmodel2cond(r_cond,connectfile,modelfile)
+ !# coded on 2018.06.21
  use modelpart
  use param
  implicit none
@@ -912,10 +1173,10 @@ subroutine readmodel2cond(r_cond,connectfile,modelfile)
   stop
  end
 
-!######################################### OUTRMS
-!# rms -> misfit on 2017.12.22
-!# coded on 2017.09.08
+!########################################### OUTRMS
 subroutine OUTRMS(idev,ite,nrms,misfit,alpha,rough1,rough2,icflag)
+ !# rms -> misfit on 2017.12.22
+ !# coded on 2017.09.08
  implicit none
  integer(4),intent(in) :: idev,ite
  integer(4),intent(in) :: icflag ! 0 : not converged, 1: converged
@@ -926,16 +1187,17 @@ subroutine OUTRMS(idev,ite,nrms,misfit,alpha,rough1,rough2,icflag)
  if (ite .eq. 1) write(idev,'(a)') "iteration#     nRMS            RMS          alpha         Roughness   tRoughness"!2020.09.29
  if      ( icflag .eq. 0 ) then
      write(idev, '(i10,5g15.7)') ite,nrms, misfit, alpha,rough1,rough2 ! 2017.09.04
+     write(*,*) "Not converged yet..." ! 2022.10.31
  else if ( icflag .eq. 1 ) then
      write(*,*) "Converged!!with nrms =",nrms ! normalized rms 2017.09.08
      write(idev,'(i10,5g15.7,a)') ite, nrms, misfit, alpha,rough1,rough2,"Converged!"! 2017.09.04
  end if
  return
  end
-!######################################### OUTRMS
-!# rms -> misfit on 2017.12.22
-!# coded on 2017.09.08
+!########################################### OUTRMS_MT
 subroutine OUTRMS_MT(idev,ite,nrms_mt,misfit_mt,alpha,rough1,rough2,icflag)
+ !# rms -> misfit on 2017.12.22
+ !# coded on 2017.09.08
   implicit none
   integer(4),intent(in) :: idev,ite
   integer(4),intent(in) :: icflag ! 0 : not converged, 1: converged
@@ -952,119 +1214,141 @@ subroutine OUTRMS_MT(idev,ite,nrms_mt,misfit_mt,alpha,rough1,rough2,icflag)
   end if
   return
   end
+
+!########################################### OUTRMS_TIP ### 2026.03.11
+subroutine OUTRMS_TIP(idev,ite,nrms_tip,misfit_tip,alpha,rough1,rough2,icflag)
+ !# rms -> misfit on 2017.12.22
+ !# coded on 2017.09.08
+  implicit none
+  integer(4),intent(in) :: idev,ite
+  integer(4),intent(in) :: icflag ! 0 : not converged, 1: converged
+  real(8),   intent(in) :: misfit_tip,nrms_tip,alpha
+  real(8),   intent(in) :: rough1 ! roughness using usual model
+  real(8),   intent(in) :: rough2 ! roughness using transformed model (only iboundtype = 2)
   
+  if (ite .eq. 1) write(idev,'(a)') "iteration#     nRMStip         RMStip       alpha         Roughness   tRoughness"!2020.09.29
+  if      ( icflag .eq. 0 ) then
+       write(idev, '(i10,5g15.7)') ite,nrms_tip, misfit_tip, alpha,rough1,rough2 ! 2017.09.04
+  else if ( icflag .eq. 1 ) then
+       write(*,*) "Converged!!with nrms_tip =",nrms_tip ! normalized rms 2017.09.08
+       write(idev,'(i10,5g15.7,a)') ite, nrms_tip, misfit_tip, alpha,rough1,rough2,"Converged!"! 2017.09.04
+  end if
+  return
+  end
 
-!######################################### OUTOBSFILESINV 2018.10.05
-!# modified on 2018.10.05
-!# copied from src_inv_mpi/n_inv_mpi.f90 2017.09.03
+
+!########################################### OUTOBSFILESINV 2018.10.05
 subroutine OUTOBSFILESINV(g_param,g_param_joint,nsr_inv,sparam,tresp,nfreq,ite,ialpha)
-use param_jointinv ! 2017.09.03
-use param
-use outresp
-implicit none
-integer(4),                intent(in)    :: ite,nfreq,ialpha ! 2017.09.11
-integer(4),                intent(in)    :: nsr_inv
-type(respdata),            intent(in)    :: tresp(5,nsr_inv,nfreq)!2017.07.14
-type(param_forward),       intent(in)    :: g_param
-type(param_source),        intent(in)    :: sparam          ! 2017.07.14
-type(param_joint),   intent(in)    :: g_param_joint   ! 2017.07.14
-integer(4), allocatable, dimension(:)    :: srcindex        ! 2017.07.14
-real(8),    allocatable, dimension(:)    :: freq            ! 2017.07.14
-character(2)                             :: num             ! 2017.07.14
-integer(4)                               :: nh, nsi,nso     ! 2018.10.05
-integer(4)                               :: i,j,k,l,nobs    ! 2017.07.14
-character(100)                           :: ampname,phaname ! 2017.09.03
-character(50)                            :: head,site, sour ! 2017.07.14
-logical,allocatable,dimension(:,:,:,:,:) :: data_avail      ! 2018.10.05
-integer(4)                               :: idat,ialphaflag ! 2017.09.11
-character(1)                             :: num2            ! 2017.09.11
-integer(4)                               :: icomp
-integer(4)                               :: iflag_comp(5)
+ !# modified on 2018.10.05
+ !# copied from src_inv_mpi/n_inv_mpi.f90 2017.09.03
+ use param_jointinv ! 2017.09.03
+ use param
+ use outresp
+ implicit none
+ integer(4),                intent(in)    :: ite,nfreq,ialpha ! 2017.09.11
+ integer(4),                intent(in)    :: nsr_inv
+ type(respdata),            intent(in)    :: tresp(5,nsr_inv,nfreq)!2017.07.14
+ type(param_forward),       intent(in)    :: g_param
+ type(param_source),        intent(in)    :: sparam          ! 2017.07.14
+ type(param_joint),   intent(in)    :: g_param_joint   ! 2017.07.14
+ integer(4), allocatable, dimension(:)    :: srcindex        ! 2017.07.14
+ real(8),    allocatable, dimension(:)    :: freq            ! 2017.07.14
+ character(2)                             :: num             ! 2017.07.14
+ integer(4)                               :: nh, nsi,nso     ! 2018.10.05
+ integer(4)                               :: i,j,k,l,nobs    ! 2017.07.14
+ character(100)                           :: ampname,phaname ! 2017.09.03
+ character(50)                            :: head,site, sour ! 2017.07.14
+ logical,allocatable,dimension(:,:,:,:,:) :: data_avail      ! 2018.10.05
+ integer(4)                               :: idat,ialphaflag ! 2017.09.11
+ character(1)                             :: num2            ! 2017.09.11
+ integer(4)                               :: icomp
+ integer(4)                               :: iflag_comp(5)
 
-!#[0]## set
- nobs       = g_param%nobs
- head       = g_param_joint%outputfolder     ! 2017.07.25
- nh         = len_trim(head)
- allocate(srcindex(nsr_inv), freq(nfreq) )   ! 2017.07.14
- allocate(data_avail(2,5,nfreq,nobs,nsr_inv))! 2018.10.05
- data_avail = g_param_joint%data_avail       ! 2017.09.03 see m_param_inv.f90
- srcindex   = g_param_joint%srcindex         ! 2017.07.14
- freq       = g_param%freq                   ! 2017.07.14
- ialphaflag = g_param_joint%ialphaflag       ! 2017.09.11
- iflag_comp = g_param_joint%iflag_comp       ! 2018.10.05
- if ( ialphaflag .eq. 1 ) then      ! L-curve  2017.09.11
-    write(num2,'(i1)') ialpha                ! 2017.09.11
-    head = head(1:nh)//"a"//num2(1:1)//"/"   ! 2017.09.11
-    nh = len_trim(head)                      ! 2017.09.11
- end if
+ !#[0]## set
+   nobs       = g_param%nobs
+   head       = g_param_joint%outputfolder     ! 2017.07.25
+   nh         = len_trim(head)
+   allocate(srcindex(nsr_inv), freq(nfreq) )   ! 2017.07.14
+   allocate(data_avail(2,5,nfreq,nobs,nsr_inv))! 2018.10.05
+   data_avail = g_param_joint%data_avail       ! 2017.09.03 see m_param_inv.f90
+   srcindex   = g_param_joint%srcindex         ! 2017.07.14
+   freq       = g_param%freq                   ! 2017.07.14
+   ialphaflag = g_param_joint%ialphaflag       ! 2017.09.11
+   iflag_comp = g_param_joint%iflag_comp       ! 2018.10.05
+   if ( ialphaflag .eq. 1 ) then      ! L-curve  2017.09.11
+     write(num2,'(i1)') ialpha                ! 2017.09.11
+     head = head(1:nh)//"a"//num2(1:1)//"/"   ! 2017.09.11
+     nh = len_trim(head)                      ! 2017.09.11
+   end if
 
  write(num,'(i2.2)')  ite                    ! 2017.07.14
  write(*,*) "nsr_inv",nsr_inv
  write(*,*) "nfreq",  nfreq
  write(*,*) "nobs",   nobs
 
-!#[2]##
- do l=1,nobs
-  site  = g_param%obsname(l)
-  nsi   = len_trim(site)
+ !#[2]##
+   do l=1,nobs
+     site  = g_param%obsname(l)
+     nsi   = len_trim(site)
 
-  do k=1,nsr_inv
-   sour     = sparam%sourcename(srcindex(k))
-   nso      = len_trim(sour)
+     do k=1,nsr_inv
+       sour     = sparam%sourcename(srcindex(k))
+       nso      = len_trim(sour)
 
-   do icomp = 1,5                        ! 2018.10.05
-    if ( iflag_comp(icomp) .eq. 0) cycle ! 2018.10.05
+       do icomp = 1,5                        ! 2018.10.05
+         if ( iflag_comp(icomp) .eq. 0) cycle ! 2018.10.05
 
-    ampname = head(1:nh)//site(1:nsi)//"_"//sour(1:nso)//"_"//comp(icomp)//"amp"//num//".dat"
-    phaname = head(1:nh)//site(1:nsi)//"_"//sour(1:nso)//"_"//comp(icomp)//"pha"//num//".dat"
-    open(31,file=ampname) ! 2017.09.04
-    open(32,file=phaname) ! 2017.09.04
+         ampname = head(1:nh)//site(1:nsi)//"_"//sour(1:nso)//"_"//comp(icomp)//"amp"//num//".dat"
+         phaname = head(1:nh)//site(1:nsi)//"_"//sour(1:nso)//"_"//comp(icomp)//"pha"//num//".dat"
+         open(31,file=ampname) ! 2017.09.04
+         open(32,file=phaname) ! 2017.09.04
 
-    do i=1,nfreq
-      idat = 0 ! 2017.09.04
-      if ( data_avail(1,icomp,i,l,k)) idat = 1
-       write(31,110) freq(i),idat,tresp(icomp,k,i)%ftobsamp(l) ! amp of bz 2018.10.05
-      idat = 0  ! 2017.09.04
-      if ( data_avail(2,icomp,i,l,k)) idat = 1 ! pha 2017.09.04
-       write(32,110) freq(i),idat,tresp(icomp,k,i)%ftobsphase(l)! pha of bz 2018.10.05
-    end do
+         do i=1,nfreq
+           idat = 0 ! 2017.09.04
+           if ( data_avail(1,icomp,i,l,k)) idat = 1
+           write(31,110) freq(i),idat,tresp(icomp,k,i)%ftobsamp(l) ! amp of bz 2018.10.05
+           idat = 0  ! 2017.09.04
+           if ( data_avail(2,icomp,i,l,k)) idat = 1 ! pha 2017.09.04
+           write(32,110) freq(i),idat,tresp(icomp,k,i)%ftobsphase(l)! pha of bz 2018.10.05
+         end do
 
-    close(31) ! 2017.09.04
-    close(32) ! 2017.09.04
-   end do     ! 2018.10.05
-  end do
- end do
+         close(31) ! 2017.09.04
+         close(32) ! 2017.09.04
+       end do     ! 2018.10.05
+     end do
+   end do
 
  write(*,*) "### OUTOBSFILESINV END!! ###"
 
-110 format(g15.7,i5,g15.7)
-return
-end
+ 110 format(g15.7,i5,g15.7)
+ return
+ end
 
-!######################################### OUTOBSFILESINV 2018.10.05
-!# coded on 2022.01.02
-subroutine OUTOBSFILESINV_MT(g_param,g_param_joint,resp_mt,nfreq,ite,ialpha)
-  use param_jointinv ! 2017.09.03
-  use param_mt
-  use outresp
-  implicit none
-  integer(4),                intent(in)    :: ite,nfreq,ialpha! 2017.09.11
-  type(respmt),              intent(in)    :: resp_mt(nfreq)  ! 2022.01.02
-  type(param_forward_mt),    intent(in)    :: g_param         ! 2022.01.02
-  type(param_joint),         intent(in)    :: g_param_joint   ! 2017.07.14
-  real(8)                                  :: freq            ! 2017.07.14
-  character(2)                             :: num             ! 2017.07.14
-  integer(4)                               :: nhead, nsite    ! 2018.10.05
-  integer(4)                               :: i,j,k,l,nobs    ! 2017.07.14
-  character(100)                           :: filename1       ! 2022.01.22
-  character(100)                           :: filename2       ! 2022.01.22
-  character(50)                            :: head,site       ! 2017.07.14
-  logical,allocatable,dimension(:,:,:,:)   :: data_avail      ! 2022.01.02
-  integer(4)                               :: idat,ialphaflag ! 2017.09.11
-  character(1)                             :: num2            ! 2017.09.11
-  integer(4)                               :: icomp
+!########################################### OUTOBSFILESINV 2022.01.02
+subroutine OUTOBSFILESINV_MT(g_param,g_param_joint,resp_mt,nfreq,ite,ialpha)! 
+ !# coded on 2022.01.02
+ !# declaration
+   use param_jointinv ! 2017.09.03
+   use param_mt
+   use outresp
+   implicit none
+   integer(4),                intent(in)    :: ite,nfreq,ialpha! 2017.09.11
+   type(respmt),              intent(in)    :: resp_mt(nfreq)  ! 2022.01.02
+   type(param_forward_mt),    intent(in)    :: g_param         ! 2022.01.02
+   type(param_joint),         intent(in)    :: g_param_joint   ! 2017.07.14
+   real(8)                                  :: freq            ! 2017.07.14
+   character(2)                             :: num             ! 2017.07.14
+   integer(4)                               :: nhead, nsite    ! 2018.10.05
+   integer(4)                               :: i,j,k,l,nobs    ! 2017.07.14
+   character(100)                           :: filename1       ! 2022.01.22
+   character(100)                           :: filename2       ! 2022.01.22
+   character(50)                            :: head,site       ! 2017.07.14
+   logical,allocatable,dimension(:,:,:,:)   :: data_avail      ! 2022.01.02
+   integer(4)                               :: idat,ialphaflag ! 2017.09.11
+   character(1)                             :: num2            ! 2017.09.11
+   integer(4)                               :: icomp
   
-  !#[0]## set
+ !#[1]## set
    nobs       = g_param%nobs
    head       = g_param_joint%outputfolder     ! 2017.07.25
    nhead      = len_trim(head)
@@ -1081,89 +1365,147 @@ subroutine OUTOBSFILESINV_MT(g_param,g_param_joint,resp_mt,nfreq,ite,ialpha)
    write(*,*) "nfreq",  nfreq
    write(*,*) "nobs",   nobs
   
-  !#[2]##
- do l=1,nobs
-  site  = g_param%obsname(l)
-  nsite = len_trim(site)
-  filename1 = head(1:nhead)//site(1:nsite)//"_MT"//num//".dat"     ! 2022.01.02
-  filename2 = head(1:nhead)//site(1:nsite)//"_MT_imp"//num//".dat" ! 2022.01.02
-   open(31,file=filename1)
-   open(32,file=filename2) ! 2021.12.15
+ !#[2]## output impedance and rho and phi to obs files
+   do l=1,nobs
+     site  = g_param%obsname(l)
+     nsite = len_trim(site)
+     filename1 = head(1:nhead)//site(1:nsite)//"_MT"//num//".dat"     ! 2022.01.02
+     filename2 = head(1:nhead)//site(1:nsite)//"_MT_imp"//num//".dat" ! 2022.01.02
+     open(31,file=filename1)
+     open(32,file=filename2) ! 2021.12.15
 
-   do i=1,nfreq
-    freq = g_param%freq(i)
-    write(31,'(9g15.7)') freq,resp_mt(i)%rhoxx(l),resp_mt(i)%phaxx(l),&
-    &                         resp_mt(i)%rhoxy(l),resp_mt(i)%phaxy(l),&
-    &                         resp_mt(i)%rhoyx(l),resp_mt(i)%phayx(l),&
-    &                         resp_mt(i)%rhoyy(l),resp_mt(i)%phayy(l)
-    write(32,'(9g15.7)') freq,real(resp_mt(i)%zxx(l)),imag(resp_mt(i)%zxx(l)),& ! 2021.12.15
-    &                         real(resp_mt(i)%zxy(l)),imag(resp_mt(i)%zxy(l)),& ! 2021.12.15
-    &                         real(resp_mt(i)%zyx(l)),imag(resp_mt(i)%zyx(l)),& ! 2021.12.15
-    &                         real(resp_mt(i)%zyy(l)),imag(resp_mt(i)%zyy(l))    ! 2021.12.15
+     do i=1,nfreq
+       freq = g_param%freq(i)
+       write(31,'(9g15.7)') freq,resp_mt(i)%rhoxx(l),resp_mt(i)%phaxx(l),&
+       &                         resp_mt(i)%rhoxy(l),resp_mt(i)%phaxy(l),&
+       &                         resp_mt(i)%rhoyx(l),resp_mt(i)%phayx(l),&
+       &                         resp_mt(i)%rhoyy(l),resp_mt(i)%phayy(l)
+       write(32,'(9g15.7)') freq,real(resp_mt(i)%zxx(l)),imag(resp_mt(i)%zxx(l)),& ! 2021.12.15
+       &                         real(resp_mt(i)%zxy(l)),imag(resp_mt(i)%zxy(l)),& ! 2021.12.15
+       &                         real(resp_mt(i)%zyx(l)),imag(resp_mt(i)%zyx(l)),& ! 2021.12.15
+       &                         real(resp_mt(i)%zyy(l)),imag(resp_mt(i)%zyy(l))    ! 2021.12.15
+     end do
+
+     close(31)
+     close(32) ! 2021.12.15
    end do
 
-   close(31)
-   close(32) ! 2021.12.15
-  end do
+ write(*,*) "### OUTOBSFILESINV_MT END!! ###"  
+ 110 format(g15.7,i5,g15.7)
+ return
+ end
+!########################################### OUTOBSFILESINV_TIPPER 2023.12.25
+subroutine OUTOBSFILESINV_TIP(g_param,g_param_joint,resp_tip,nfreq,ite,ialpha)
+ !# coded on 2023.12.25
+ !# declaration
+   use param_jointinv ! 2017.09.03
+   use param_mt
+   use outresp
+   implicit none
+   integer(4),                intent(in)    :: ite,nfreq,ialpha! 2017.09.11
+   type(resptip),              intent(in)    :: resp_tip(nfreq) ! 2023.12.25
+   type(param_forward_mt),    intent(in)    :: g_param         ! 2022.01.02
+   type(param_joint),         intent(in)    :: g_param_joint   ! 2017.07.14
+   real(8)                                  :: freq            ! 2017.07.14
+   character(2)                             :: num             ! 2017.07.14
+   integer(4)                               :: nhead, nsite    ! 2018.10.05
+   integer(4)                               :: i,j,k,l,nobs    ! 2017.07.14
+   character(100)                           :: filename1       ! 2022.01.22
+   character(50)                            :: head,site       ! 2017.07.14
+   logical,allocatable,dimension(:,:,:,:)   :: data_avail      ! 2023.12.25
+   integer(4)                               :: idat,ialphaflag ! 2017.09.11
+   character(1)                             :: num2            ! 2017.09.11
+   integer(4)                               :: icomp
+  
+ !#[1]## set
+   nobs       = g_param%nobs
+   head       = g_param_joint%outputfolder     ! 2017.07.25
+   nhead      = len_trim(head)
+   allocate(data_avail(2,2,nfreq,nobs) )        ! 2022.01.02
+   data_avail = g_param_joint%data_avail_tipper ! 2023.12.25 see m_param_inv.f90
+   ialphaflag = g_param_joint%ialphaflag        ! 2017.09.11
+   if ( ialphaflag .eq. 1 ) then      ! L-curve  2017.09.11
+      write(num2,'(i1)') ialpha                 ! 2017.09.11
+      head  = head(1:nhead)//"a"//num2(1:1)//"/"! 2017.09.11
+      nhead = len_trim(head)                    ! 2017.09.11
+   end if
 
-  
-   write(*,*) "### OUTOBSFILESINV_MT END!! ###"
-  
-  110 format(g15.7,i5,g15.7)
-  return
-  end
-!############################################
-!# coded on 2017.06.05
+   write(num,'(i2.2)')  ite                    ! 2026.03.11
+   write(*,*) "nfreq",  nfreq
+   write(*,*) "nobs",   nobs
+
+ !#[2]## output impedance and rho and phi to obs files
+   do l=1,nobs
+     site  = g_param%obsname(l)
+     nsite = len_trim(site)
+     filename1 = head(1:nhead)//site(1:nsite)//"_tip"//num//".dat"     ! 2022.01.02
+     open(31,file=filename1)
+
+     do i=1,nfreq
+       freq = g_param%freq(i)
+       write(31,'(9g15.7)') freq,resp_tip(i)%tx(l),resp_tip(i)%ty(l)
+     end do
+
+     close(31)
+   end do
+
+ write(*,*) "### OUTOBSFILESINV_TIP END!! ###"  
+ 110 format(g15.7,i5,g15.7)
+ return
+ end
+!############################################ SET_ICCG_VAR
 subroutine SET_ICCG_VAR(ntet,nline,g_line,A,ip)
-use iccg_var_takuto
-use line_type
-implicit none
-integer(4),         intent(in)    :: ntet,nline,ip
-type(line_info),    intent(in)    :: g_line
-type(global_matrix),intent(inout) :: A
-integer(4),allocatable,dimension(:,:) :: table_dof
-integer(4) :: dofn = 1
+ !# coded on 2017.06.05
+ use iccg_var_takuto
+ use line_type
+ implicit none
+ integer(4),         intent(in)    :: ntet,nline,ip
+ type(line_info),    intent(in)    :: g_line
+ type(global_matrix),intent(inout) :: A
+ integer(4),allocatable,dimension(:,:) :: table_dof
+ integer(4) :: dofn = 1
 
-!#[1]## set table_dof
-  allocate( table_dof(nline,dofn))
-  CALL SET_TABLE_DOF(dofn,nline,table_dof,nline)! table_dof is generated see forward_2DTMinv.f90
+ !#[1]## set table_dof
+   allocate( table_dof(nline,dofn))
+   CALL SET_TABLE_DOF(dofn,nline,table_dof,nline)! table_dof is generated see forward_2DTMinv.f90
 
-!#[2]## set allocate A
+ !#[2]## set allocate A
   CALL set_iccg_var7_dofn(dofn,6,nline,nline,nline,ntet,g_line%n6line,table_dof,A,ip)
 
-return
-end
+ return
+ end
 
-!############################################
-!# modified on 2017.09.03 for multiple sources
-!# coded on 2017.06.05
-subroutine SENDBZAPRESULT_AP(g_apdm,gt_apdm,nobs,nfreq_act,nfreq_act_ip,g_freq_joint,nsr,ip,np,g_param_joint)!2018.10.05
-use matrix
-use shareformpi_joint ! 2021.12.25
-use jacobian_joint    ! 2017.06.08
-use param_jointinv    ! 2018.10.08
-use freq_mpi_joint    ! 2022.10.20
-implicit none
-integer(4),             intent(in)    :: nobs,nfreq_act,nfreq_act_ip,ip,np
-integer(4),             intent(in)    :: nsr                   ! 2017.09.03
-type(freq_info_joint),  intent(in)    :: g_freq_joint          ! 2022.10.20
-type(amp_phase_dm),     intent(in)    :: g_apdm(nfreq_act_ip)  ! 2017.09.03
-type(param_joint),      intent(in)    :: g_param_joint         ! 2018.10.08
-type(amp_phase_dm),     intent(inout) :: gt_apdm(nfreq_act)    ! 2017.09.03
-integer(4)                            :: i,ifreq,ip_from,errno
-integer(4)                            :: icomp                 ! 2018.10.05
-integer(4)                            :: k                     ! 2017.09.03
-integer(4),          dimension(5)     :: iflag_comp            ! 2018.10.08
+!############################################ SENDBZAPRESULT_AP
+subroutine SENDBZAPRESULT_AP(g_apdm,gt_apdm,nobs,nfreq_act,nfreq_act_ip,g_freq_joint,nsr,ip,np,g_param_joint)
+ !# modified on 2017.09.03 for multiple sources
+ !# coded on 2017.06.05
+ !2018.10.05
+ use matrix
+ use shareformpi_joint ! 2021.12.25
+ use jacobian_joint    ! 2017.06.08
+ use param_jointinv    ! 2018.10.08
+ use freq_mpi_joint    ! 2022.10.20
+ implicit none
+ integer(4),             intent(in)    :: nobs,nfreq_act,nfreq_act_ip,ip,np
+ integer(4),             intent(in)    :: nsr                   ! 2017.09.03
+ type(freq_info_joint),  intent(in)    :: g_freq_joint          ! 2022.10.20
+ type(amp_phase_dm),     intent(in)    :: g_apdm(nfreq_act_ip)  ! 2017.09.03
+ type(param_joint),      intent(in)    :: g_param_joint         ! 2018.10.08
+ type(amp_phase_dm),     intent(inout) :: gt_apdm(nfreq_act)    ! 2017.09.03
+ integer(4)                            :: i,ifreq,ip_from,errno
+ integer(4)                            :: icomp                 ! 2018.10.05
+ integer(4)                            :: k                     ! 2017.09.03
+ integer(4),          dimension(5)     :: iflag_comp            ! 2018.10.08
 
-!#[0]## set
+ !#[0]## set
   iflag_comp = g_param_joint%iflag_comp ! 2018.10.08
 
-!#[1]## share ampbz
- do i=1,nfreq_act
-!  if (mod(i,np) .eq. 1 ) ip_from = -1
-!  ip_from = ip_from + 1 ; ifreq = (i-1)/np + 1
-  ip_from  = g_freq_joint%ip_from_act(i) ! 2022.10.20
-  ifreq    = g_freq_joint%if_g2l_act(i)  ! 2022.10.20
+ !#[1]## share ampbz
+   do i=1,nfreq_act
+   !  if (mod(i,np) .eq. 1 ) ip_from = -1
+   !  ip_from = ip_from + 1 ; ifreq = (i-1)/np + 1
+   ip_from  = g_freq_joint%ip_from_act(i) ! 2022.10.20
+   ifreq    = g_freq_joint%if_g2l_act(i)  ! 2022.10.20
   
 
   do k=1,nsr      ! 2017.09.03
@@ -1186,15 +1528,15 @@ integer(4),          dimension(5)     :: iflag_comp            ! 2018.10.08
 
  end do
 
-!#[2]##
+ !#[2]##
   if (ip .eq. 0) write(*,*) "### SENDBZAPRESULT END!! ###"
 
-return
-end
-!############################################
-!# modified on 2017.09.03 for multiple sources
-!# coded on 2017.06.05
-subroutine SENDRESULTINV_MT(g_mtdm,gt_mtdm,nobs_mt,nfreq_mt,nfreq_mt_ip,g_freq_joint,ip,np,g_param_joint)!2018.10.05
+ return
+ end
+!############################################ SENDRESULTINV_MT
+subroutine SENDRESULTINV_MT(g_mtdm,gt_mtdm,nobs_mt,nfreq_mt,nfreq_mt_ip,g_freq_joint,ip,np,g_param_joint)
+ !# modified on 2017.09.03 for multiple sources
+ !# coded on 2017.06.05
   use matrix
   use shareformpi_joint ! 2021.12.25
   use jacobian_joint    ! 2017.06.08
@@ -1204,15 +1546,15 @@ subroutine SENDRESULTINV_MT(g_mtdm,gt_mtdm,nobs_mt,nfreq_mt,nfreq_mt_ip,g_freq_j
   integer(4),       intent(in)    :: nobs_mt,nfreq_mt,nfreq_mt_ip,ip,np ! 2022.10.20
   type(freq_info_joint),intent(in) :: g_freq_joint
   type(param_joint),intent(in)    :: g_param_joint         ! 2018.10.08
-  type(mt_dm),      intent(in)    :: g_mtdm(nfreq_mt_ip)      ! 2017.09.03
-  type(mt_dm),      intent(inout) :: gt_mtdm(nfreq_mt)        ! 2017.09.03
+  type(mt_dm),      intent(in)    :: g_mtdm(nfreq_mt_ip)   !m_jacobian_joint.f90
+  type(mt_dm),      intent(inout) :: gt_mtdm(nfreq_mt)     ! 
   integer(4)                      :: i,ifreq,ip_from,errno
   integer(4)                            :: k                     ! 2017.09.03
     
   !#[1]## share ampbz
    do i=1,nfreq_mt
-!    if (mod(i,np) .eq. 1 ) ip_from = -1
-!    ip_from = ip_from + 1 ; ifreq = (i-1)/np + 1
+     !    if (mod(i,np) .eq. 1 ) ip_from = -1
+     !    ip_from = ip_from + 1 ; ifreq = (i-1)/np + 1
    
    ip_from  = g_freq_joint%ip_from_mt(i) ! 2022.10.20
    ifreq    = g_freq_joint%if_g2l_mt(i)  ! 2022.10.20
@@ -1235,25 +1577,59 @@ subroutine SENDRESULTINV_MT(g_mtdm,gt_mtdm,nobs_mt,nfreq_mt,nfreq_mt_ip,g_freq_j
   
   return
   end
+!############################################ SENDRESULTINV_TIP 2023.12.25
+subroutine SENDRESULTINV_TIP(g_tipdm,gt_tipdm,nobs_mt,nfreq_mt,nfreq_mt_ip,g_freq_joint,ip,np,g_param_joint)
+  ! coded on 2023.12.25
+  use matrix
+  use shareformpi_joint ! 2021.12.25
+  use jacobian_joint    ! 2017.06.08
+  use param_jointinv    ! 2018.10.08
+  use freq_mpi_joint    ! 2022.10.20
+  implicit none
+  integer(4),        intent(in)    :: nobs_mt,nfreq_mt,nfreq_mt_ip,ip,np ! 2022.10.20
+  type(freq_info_joint),intent(in) :: g_freq_joint
+  type(param_joint), intent(in)    :: g_param_joint         ! 2018.10.08
+  type(tip_dm),      intent(in)    :: g_tipdm(nfreq_mt_ip)  !
+  type(tip_dm),      intent(inout) :: gt_tipdm(nfreq_mt)    ! m_jacobian_joint.f90
+  integer(4)                       :: i,k,ifreq,ip_from,errno
+    
+  !#[1]## share ampbz
+   do i=1,nfreq_mt
+     ip_from  = g_freq_joint%ip_from_mt(i) ! 2022.10.20
+     ifreq    = g_freq_joint%if_g2l_mt(i)  ! 2022.10.20
+      
+     if ( ip .eq. ip_from )  gt_tipdm(i)%dtxdm = g_tipdm(ifreq)%dtxdm!2023.12.26
+     if ( ip .eq. ip_from )  gt_tipdm(i)%dtydm = g_tipdm(ifreq)%dtydm!2023.12.26
   
-!#############################################
-!# modified on 2022.10.20
-!# coded on 2017.06.05
+    call sharecomplexcrsmatrix(gt_tipdm(i)%dtxdm,ip_from,ip) ! m_shareformpi_joint.f90
+    call sharecomplexcrsmatrix(gt_tipdm(i)%dtydm,ip_from,ip) ! m_shareformpi_joint.f90
+  
+   end do
+  
+  !#[2]##
+    if (ip .eq. 0) write(*,*) "### SENDRESULTINV_TIP END!! ###"
+  
+  return
+  end
+  
+!############################################# SENDRECVRESULT
 subroutine SENDRECVRESULT(resp5,tresp,ip,np,nfreq_act,nfreq_act_ip,g_freq_joint,nsr) !
-use outresp
-use shareformpi_joint ! 2021.12.25
-use freq_mpi_joint    ! 2022.10.20
-implicit none
-!include 'mpif.h'
-integer(4),    intent(in)    :: ip,np,nfreq_act,nfreq_act_ip
-integer(4),    intent(in)    :: nsr                   ! 2017.09.03
-type(freq_info_joint),intent(in) :: g_freq_joint      ! 2022.10.20
-type(respdata),intent(in)    :: resp5(5,nsr,nfreq_act_ip) ! 2017.09.03
-type(respdata),intent(inout) :: tresp(5,nsr,nfreq_act)    ! 2017.09.03
-integer(4)                   :: errno,i,j,k,l,ip_from,ifreq_ip ! 2022.10.20
+ !# modified on 2022.10.20
+ !# coded on 2017.06.05
+ use outresp
+ use shareformpi_joint ! 2021.12.25
+ use freq_mpi_joint    ! 2022.10.20
+ implicit none
+ !include 'mpif.h'
+ integer(4),    intent(in)    :: ip,np,nfreq_act,nfreq_act_ip
+ integer(4),    intent(in)    :: nsr                   ! 2017.09.03
+ type(freq_info_joint),intent(in) :: g_freq_joint      ! 2022.10.20
+ type(respdata),intent(in)    :: resp5(5,nsr,nfreq_act_ip) ! 2017.09.03
+ type(respdata),intent(inout) :: tresp(5,nsr,nfreq_act)    ! 2017.09.03
+ integer(4)                   :: errno,i,j,k,l,ip_from,ifreq_ip ! 2022.10.20
 
-!#[1]##
-do i=1,nfreq_act
+ !#[1]##
+ do i=1,nfreq_act
 
   ip_from  = g_freq_joint%ip_from_act(i) ! 2022.10.20
   ifreq_ip = g_freq_joint%if_g2l_act(i)  ! 2022.10.20
@@ -1273,15 +1649,15 @@ do i=1,nfreq_act
 
   end do
 
-end do
+ end do
 
-if ( ip .eq. 0 ) write(*,*) "### SENDRECVRESULT END!! ###"
+ if ( ip .eq. 0 ) write(*,*) "### SENDRECVRESULT END!! ###"
 
-return
-end
-!#############################################
-!2022.10.20
-subroutine SENDRECVIMP(imp_mt,timp_mt,ip,np,nfreq_mt,nfreq_mt_ip,g_freq_joint)!2017.09.03
+ return
+ end
+!############################################# SENDRECVIMP
+subroutine SENDRECVIMP(imp_mt,timp_mt,ip,np,nfreq_mt,nfreq_mt_ip,g_freq_joint) 
+ !2022.10.20
   use outresp
   use shareformpi_joint ! 2021.12.25
   use freq_mpi_joint    ! 2022.10.20
@@ -1291,104 +1667,103 @@ subroutine SENDRECVIMP(imp_mt,timp_mt,ip,np,nfreq_mt,nfreq_mt_ip,g_freq_joint)!2
   type(freq_info_joint),intent(in) :: g_freq_joint  ! 2022.10.20
   type(respmt),  intent(in)    ::  imp_mt(nfreq_mt_ip) ! 2022.10.20
   type(respmt),  intent(inout) :: timp_mt(nfreq_mt)    ! 2022.10.20
-  integer(4)                   :: errno,i,j,k,l,ip_from,ifreq             ! 2020.08.06
+  integer(4)                   :: errno,i,j,k,l,ip_from,ifreq ! 2020.08.06
   
   !#[1]##
    do i=1,nfreq_mt
-!    if (mod(i,np) .eq. 1 ) ip_from = -1
-!    ip_from = ip_from + 1 ; ifreq = (i-1)/np + 1
-
-  ip_from  = g_freq_joint%ip_from_mt(i) ! 2022.10.20
-  ifreq    = g_freq_joint%if_g2l_mt(i)  ! 2022.10.20
-
-  
-  if ( ip .eq. ip_from ) then
-      timp_mt(i) = imp_mt(ifreq) ! 20200807
-    end if
-  
-  
-!  do j=1,5
-!     do k=1,nsr ! 2017.09.03
-  
-  !if ( ip .eq. ip_from .and. j .eq. 3 ) then ! 20200806
-  !  write(*,*) "-- before sharing --SENDRECVRESULT --"
-  !  write(*,*)"ip_from",ip_from,"tresp i",i,"k",k,"j",j
-  !  write(*,'(a,4g15.7)') "resp5 amp",(resp5(j,k,ifreq)%ftobsamp(l),l=1,resp5(j,k,ifreq)%nobs) ! 20200807
-  !  write(*,'(a,4g15.7)') "resp5 phase",(resp5(j,k,ifreq)%ftobsphase(l),l=1,resp5(j,k,ifreq)%nobs) ! 20200807
-  !  write(*,'(a,4g15.7)') "tresp amp",(tresp(j,k,i)%ftobsamp(l),l=1,tresp(j,k,i)%nobs)
-  !  write(*,'(a,4g15.7)') "tresp phase",(tresp(j,k,i)%ftobsphase(l),l=1,tresp(j,k,i)%nobs)
-  !  write(*,*) "--"
-  ! end if
-  
+     ip_from  = g_freq_joint%ip_from_mt(i) ! 2022.10.20
+     ifreq    = g_freq_joint%if_g2l_mt(i)  ! 2022.10.20
+     if ( ip .eq. ip_from ) then
+       timp_mt(i) = imp_mt(ifreq) ! 20200807
+     end if
+     !write(*,*) "ip",ip,"ip_from",ip_from,"i",i,"ifreq",ifreq ! 2022.10.20
      call shareimpdata(timp_mt(i),ip_from) ! see m_shareformpi_ap 2022.01.02
-  
-  !if ( ip .eq. 0 .and. j .eq. 3 ) then ! 20200806
-  ! write(*,*) "-- after sharing --SENDRECVRESULT --"
-  ! write(*,*)"ip=0 tresp i",i,"k",k,"j",j
-  ! write(*,'(a,4g15.7)') "tresp amp",(tresp(j,k,i)%ftobsamp(l),l=1,tresp(j,k,i)%nobs)
-  ! write(*,'(a,4g15.7)') "tresp phase",(tresp(j,k,i)%ftobsphase(l),l=1,tresp(j,k,i)%nobs)
-  ! write(*,*) "--"
-  !end if
-  
- !    end do     ! 2017.09.03
- !   end do
    end do
+   if ( ip .eq. 0 ) write(*,*) "### SENDRECVIMP END!! ###" ! 2022.01.02
   
-  if ( ip .eq. 0 ) write(*,*) "### SENDRECVIMP END!! ###" ! 2022.01.02
+  return
+  end
+!############################################# SENDRECVTIP ! 2023.12.26
+subroutine SENDRECVTIP(tip_mt,ttip_mt,ip,np,nfreq_mt,nfreq_mt_ip,g_freq_joint) 
+  ! gather tip_mt info as ttip_mt
+  use outresp
+  use shareformpi_joint ! 2021.12.25
+  use freq_mpi_joint    ! 2022.10.20
+  use shareformpi_mt    ! 2025.09.17 see ../common_mpi/m_shareformpi_mt.f90
+  implicit none
+  !include 'mpif.h'
+  integer(4),           intent(in)    :: ip,np,nfreq_mt,nfreq_mt_ip
+  type(freq_info_joint),intent(in)    :: g_freq_joint  ! 2022.10.20
+  type(resptip),        intent(in)    ::  tip_mt(nfreq_mt_ip) ! 2022.10.20
+  type(resptip),        intent(inout) :: ttip_mt(nfreq_mt)    ! 2022.10.20
+  integer(4)                   :: errno,i,j,k,l,ip_from,ifreq ! 2020.08.06
+  
+  !#[1]##
+   do i=1,nfreq_mt
+     ip_from  = g_freq_joint%ip_from_mt(i) ! 2022.10.20
+     ifreq    = g_freq_joint%if_g2l_mt(i)  ! 2022.10.20
+     if ( ip .eq. ip_from ) then
+       ttip_mt(i) = tip_mt(ifreq) ! 20200807
+     end if
+     call sharetipdata(ttip_mt(i),ip_from) ! m_shareformpi_mt.f90 2025.09.17
+   end do
+   if ( ip .eq. 0 ) write(*,*) "### SENDRECVTIP END!! ###"
   
   return
   end
 
-!#############################################
-!# modified on 2017.07.13 to include nsr
-!# coded on 2017.05.31
+!############################################# ALLOCATERESP
 subroutine ALLOCATERESP(g_param,nsr,resp5,tresp,ip,nfreq,nfreq_ip)!2017.07.13
-use outresp
-use param
-implicit none
-type(param_forward),intent(in)    :: g_param
-integer(4),         intent(in)    :: nsr ! 2017.07.13
-integer(4),         intent(in)    :: nfreq,ip,nfreq_ip
-type(respdata),     intent(inout) :: resp5(5,nsr,nfreq_ip) ! 2017.07.13
-type(respdata),     intent(inout) :: tresp(5,nsr,nfreq)    ! 2017.07.13
-integer(4) :: i,j,k,nobs
+ !# modified on 2017.07.13 to include nsr
+ !# coded on 2017.05.31
+ use outresp
+ use param
+ implicit none
+ type(param_forward),intent(in)    :: g_param
+ integer(4),         intent(in)    :: nsr ! 2017.07.13
+ integer(4),         intent(in)    :: nfreq,ip,nfreq_ip
+ type(respdata),     intent(inout) :: resp5(5,nsr,nfreq_ip) ! 2017.07.13
+ type(respdata),     intent(inout) :: tresp(5,nsr,nfreq)    ! 2017.07.13
+ integer(4) :: i,j,k,nobs
 
-nobs = g_param%nobs
+ nobs = g_param%nobs
 
-do j=1,nfreq_ip
+ do j=1,nfreq_ip
  do i=1,5
   do k=1,nsr ! 2017.07.13
    CALL ALLOCATERESPDATA(nobs,resp5(i,k,j)) ! 2017.07.13
   end do     ! 2017.07.13
  end do
-end do
+ end do
 
-do j=1,nfreq
+ do j=1,nfreq
  do i=1,5
   do k=1,nsr ! 2017.07.13
    CALL ALLOCATERESPDATA(nobs,tresp(i,k,j)) ! 2017.07.13
   end do     ! 2017.07.13
  end do
-end do
+ end do
 
-if( ip .eq. 0) write(*,*) "### ALLOCATERESP END!! ###"
-return
-end
-!#############################################
-!# copied from ../src_3DMT/ALLOCATERESP on 2021.12.30
-subroutine ALLOCATERESP_MT(nobs,nsr,resp,resp_mt,ip,nfreq)
+ if( ip .eq. 0) write(*,*) "### ALLOCATERESP END!! ###"
+ return
+ end
+!############################################# ALLOCATERESP_MT
+subroutine ALLOCATERESP_MT(nobs,nsr,resp,resp_mt,resp_tip,ip,nfreq)
+  !# copied from ../src_3DMT/ALLOCATERESP on 2021.12.30
   use outresp
   use param
   implicit none
   integer(4),         intent(in)    :: nobs
   integer(4),         intent(in)    :: nsr ! 2017.07.11
   integer(4),         intent(in)    :: nfreq,ip
-  type(respdata),     intent(inout) :: resp(5,nsr,nfreq) !2017.07.11
-  type(respmt),       intent(inout) :: resp_mt(nfreq)     !2021.09.14
+  type(respdata),     intent(inout) :: resp(5,nsr,nfreq) !5 comp for 2 polarization
+  type(respmt),       intent(inout) :: resp_mt(nfreq)    ! impedances for each freq
+  type(resptip),      intent(inout) :: resp_tip(nfreq)   ! tippers for each freq
   integer(4)                        :: i,j,k
   
   do j=1,nfreq
    CALL ALLOCATERESPMT(  nobs,resp_mt(j)    ) ! 2021.09.14 m_outresp.f90
+   CALL ALLOCATERESPTIP( nobs,resp_tip(j)   ) ! 2023.12.23 m_outresp.f90
    do i=1,5
     do k=1,nsr ! 2017.07.11
      CALL ALLOCATERESPDATA(nobs,resp(  i,k,j)) ! 2017.07.11
@@ -1396,126 +1771,125 @@ subroutine ALLOCATERESP_MT(nobs,nsr,resp,resp_mt,ip,nfreq)
    end do
   end do
   
-  if( ip .eq. 0) write(*,*) "### ALLOCATERESP END!! ###"
+  if( ip .eq. 0) write(*,*) "### ALLOCATERESP_MT END!! ###"
   return
   end
-!#############################################
-!# modified on 2018.10.05 for multiple components
-!# modified on 2017.09.03 to include multiple sources
-!# coded on 2017.05.31
-subroutine CALOBSEBCOMP(fp,fs,nline,nsr,omega,coeffobs,resp5,g_param_joint)!2017.09.03
-use matrix
-use outresp
-use param_jointinv ! 2018.10.05
-implicit none
-type(param_joint),intent(in)    :: g_param_joint   ! 2018.10.05
-real(8),                intent(in)    :: omega
-integer(4),             intent(in)    :: nline
-integer(4),             intent(in)    :: nsr             ! 2017.09.03
-complex(8),             intent(in)    :: fp(nline,nsr),fs(nline,nsr)! 2018.10.05
-type(real_crs_matrix),  intent(in)    :: coeffobs(2,3)
-type(respdata),         intent(inout) :: resp5(5,nsr)    ! 2017.09.03
-integer(4)                            :: i,j,isr,icomp         ! 2017.09.03
-integer(4),             dimension(5)  :: iflag_comp      ! 2018.10.05
-complex(8), allocatable,dimension(:,:):: fpin,fsin       ! 20200729
+!############################################# CALOBSEBCOMP
+subroutine CALOBSEBCOMP(fp,fs,nline,nsr,omega,coeffobs,resp5,g_param_joint)  
+ !# modified on 2018.10.05 for multiple components
+ !# modified on 2017.09.03 to include multiple sources
+ !# coded on 2017.05.31
+ !2017.09.03
+ use matrix
+ use outresp
+ use param_jointinv ! 2018.10.05
+ implicit none
+ type(param_joint),intent(in)    :: g_param_joint   ! 2018.10.05
+ real(8),                intent(in)    :: omega
+ integer(4),             intent(in)    :: nline
+ integer(4),             intent(in)    :: nsr             ! 2017.09.03
+ complex(8),             intent(in)    :: fp(nline,nsr),fs(nline,nsr)! 2018.10.05
+ type(real_crs_matrix),  intent(in)    :: coeffobs(2,3)
+ type(respdata),         intent(inout) :: resp5(5,nsr)    ! 2017.09.03
+ integer(4)                            :: i,j,isr,icomp         ! 2017.09.03
+ integer(4),             dimension(5)  :: iflag_comp      ! 2018.10.05
+ complex(8), allocatable,dimension(:,:):: fpin,fsin       ! 20200729
 
-allocate(fpin(nline,nsr),fsin(nline,nsr)) ! 20200729
+ allocate(fpin(nline,nsr),fsin(nline,nsr)) ! 20200729
 
-!# set
-iflag_comp = g_param_joint%iflag_comp ! 2018.10.08
+ !# set
+ iflag_comp = g_param_joint%iflag_comp ! 2018.10.08
 
-!# calculate
-icomp = 0 ! 1:Bx, 2: By, 3: Bz, 4: Ex, 5: Ey
-do i=2,1,-1
- do j=1,3
- if ( icomp .eq. 5 ) exit
- icomp = icomp + 1
+ !# calculate
+ icomp = 0 ! 1:Bx, 2: By, 3: Bz, 4: Ex, 5: Ey
+ do i=2,1,-1
+   do j=1,3
+     if ( icomp .eq. 5 ) exit
+     icomp = icomp + 1
 
- if ( iflag_comp(icomp) .eq. 0 ) cycle
+     if ( iflag_comp(icomp) .eq. 0 ) cycle
 
- if ( icomp .le. 3 ) then
-  fpin(:,:) = fp(:,:)
-  fsin(:,:) = fs(:,:)
- else if ( icomp .ge. 4) then
-  fpin = - (0.d0,1.d0)*omega*fp ! E= -i*omega*A
-  fsin = - (0.d0,1.d0)*omega*fs !
- end if
+     if ( icomp .le. 3 ) then
+       fpin(:,:) = fp(:,:)
+       fsin(:,:) = fs(:,:)
+     else if ( icomp .ge. 4) then
+       fpin = - (0.d0,1.d0)*omega*fp ! E= -i*omega*A
+       fsin = - (0.d0,1.d0)*omega*fs !
+     end if
 
- do isr= 1, nsr ! 2017.09.03
-  CALL CALOBSRESP(fpin(:,isr),fsin(:,isr),nline,coeffobs(i,j),resp5(icomp,isr))!bz 2018.10.08
- end do       ! 2017.09.03
+     do isr= 1, nsr ! 2017.09.03
+       CALL CALOBSRESP(fpin(:,isr),fsin(:,isr),nline,coeffobs(i,j),resp5(icomp,isr))!bz 2018.10.08
+     end do       ! 2017.09.03
 
+   end do
  end do
-end do
 
-return
-end subroutine
+ return
+ end subroutine
 
-!############################################## subroutine CALRMS_AP
-!# Coded 2017.06.08
+!############################################## CALRMS_AP
 subroutine CALRMS_AP(g_data,h_data,Cd,misfit,nrms)
-use param_jointinv
-use matrix
-use caltime ! 2017.12.22
-type(real_crs_matrix),intent(in)     :: Cd
-type(data_vec_ap),    intent(in)     :: g_data ! obs 2018.10.08 phase are possibly modified
-type(data_vec_ap),    intent(in)     :: h_data ! cal 2018.10.08
-real(8),              intent(out)    :: misfit,nrms
-real(8),allocatable,dimension(:)     :: dvec1,dvec2,dvec
-integer(4)                           :: ndat,ndat1,ndat2,i
-real(8)                              :: d ! 2017.09.06
-type(watch) :: t_watch ! 2017.12.22
+ use param_jointinv
+ use matrix
+ use caltime ! 2017.12.22
+ type(real_crs_matrix),intent(in)     :: Cd
+ type(data_vec_ap),    intent(in)     :: g_data ! obs 2018.10.08 phase are possibly modified
+ type(data_vec_ap),    intent(in)     :: h_data ! cal 2018.10.08
+ real(8),              intent(out)    :: misfit,nrms
+ real(8),allocatable,dimension(:)     :: dvec1,dvec2,dvec
+ integer(4)                           :: ndat,ndat1,ndat2,i
+ real(8)                              :: d ! 2017.09.06
+ type(watch) :: t_watch ! 2017.12.22
 
-call watchstart(t_watch) ! 2017.12.22
-!#[0]## set
-ndat  = g_data%ndat
-ndat1 = h_data%ndat
-ndat2 = Cd%ntot
-if (ndat .ne. ndat1 .or. ndat .ne. ndat2 ) goto 99
-allocate(dvec1(ndat),dvec2(ndat),dvec(ndat))
-dvec1 = g_data%dvec
-dvec2 = h_data%dvec
-dvec  = dvec2 - dvec1
+ call watchstart(t_watch) ! 2017.12.22
+ !#[0]## set
+ ndat  = g_data%ndat
+ ndat1 = h_data%ndat
+ ndat2 = Cd%ntot
+ if (ndat .ne. ndat1 .or. ndat .ne. ndat2 ) goto 99
+ allocate(dvec1(ndat),dvec2(ndat),dvec(ndat))
+ dvec1 = g_data%dvec
+ dvec2 = h_data%dvec
+ dvec  = dvec2 - dvec1
 
-!# check
-if (.false.) then
+ !# check
+ if (.false.) then
  write(*,'(5x,a)') " obs          |  cal         | d^2           | d^2/e^2"
  write(*,*) "ndat1"
  do i=1,ndat1
   d = dvec2(i)-dvec1(i)
   write(*,'(i5,4g15.7)') i,dvec1(i),dvec2(i),d**2.d0,d**2.d0/Cd%val(i)
  end do
-end if
+ end if
 
-!#[1]## cal rms
-misfit = 0.d0
-do i=1,ndat
- misfit = misfit + dvec(i)**2.d0 / Cd%val(i) ! dvec(i)**2/err(i)**2
-end do
-nrms = sqrt(misfit/dble(ndat)) ! 2017.12.22
-misfit = 0.5d0 * misfit ! 2017.12.22
+ !#[1]## cal rms
+ misfit = 0.d0
+ do i=1,ndat
+  misfit = misfit + dvec(i)**2.d0 / Cd%val(i) ! dvec(i)**2/err(i)**2
+ end do
+ nrms = sqrt(misfit/dble(ndat)) ! 2017.12.22
+ misfit = 0.5d0 * misfit ! 2017.12.22
 
-write(*,'(a,g15.7)') "            RMS =",misfit ! 2020.09.18
-write(*,'(a,g15.7)') " Normarized RMS =",nrms   ! 2020.09.18
-call watchstop(t_watch) ! 2017.12.22
-!write(*,'(a,f9.4,a)') " ### CALRMS_AP END!! ### Time=",t_watch%time," [min]"! 2020.09.18
-write(*,'(a)') " ### CALRMS_AP END!! ###" ! Time=",t_watch%time," [min]"! 2020.09.29
+ write(*,'(a,g15.7)') "            RMS =",misfit ! 2020.09.18
+ write(*,'(a,g15.7)') " Normarized RMS =",nrms   ! 2020.09.18
+ call watchstop(t_watch) ! 2017.12.22
+ !write(*,'(a,f9.4,a)') " ### CALRMS_AP END!! ### Time=",t_watch%time," [min]"! 2020.09.18
+ write(*,'(a)') " ### CALRMS_AP END!! ###" ! Time=",t_watch%time," [min]"! 2020.09.29
 
-return
-99 continue
-write(*,*) "GEGEGE! ndat",ndat,".ne. ndat1",ndat1,"or .ne. ndat2",ndat2
-stop
+ return
+ 99 continue
+ write(*,*) "GEGEGE! ndat",ndat,".ne. ndat1",ndat1,"or .ne. ndat2",ndat2
+ stop
 
-end subroutine
-!############################################## subroutine CALRMS_MT
-!# Coded 2022.01.04
+ end subroutine
+!############################################## CALRMS_MT
 subroutine CALRMS_MT(g_data_mt,h_data_mt,Cd_mt,misfit_mt,nrms_mt)
   use param_jointinv
   use matrix
   use caltime ! 2017.12.22
   type(real_crs_matrix),intent(in)     :: Cd_mt
-  type(data_vec_mt),    intent(in)     :: g_data_mt ! obs
-  type(data_vec_mt),    intent(in)     :: h_data_mt ! cal 
+  type(data_vec_mt),    intent(in)     :: g_data_mt ! obs tmp and tipper
+  type(data_vec_mt),    intent(in)     :: h_data_mt ! cal tmp and tipper
   real(8),              intent(out)    :: misfit_mt,nrms_mt
   real(8),allocatable,dimension(:)     :: dvec_mt1,dvec_mt2,dvec_mt
   integer(4)                           :: ndat_mt,ndat_mt1,ndat_mt2,i
@@ -1527,6 +1901,7 @@ subroutine CALRMS_MT(g_data_mt,h_data_mt,Cd_mt,misfit_mt,nrms_mt)
   ndat_mt  = g_data_mt%ndat_mt
   ndat_mt1 = h_data_mt%ndat_mt
   ndat_mt2 = Cd_mt%ntot
+  write(*,*) "ndat_mt",ndat_mt,"ndat_mt1",ndat_mt1,"ndat_mt2",ndat_mt2
   if (ndat_mt .ne. ndat_mt1 .or. ndat_mt .ne. ndat_mt2 ) goto 99
   allocate(dvec_mt1(ndat_mt),dvec_mt2(ndat_mt),dvec_mt(ndat_mt))
   dvec_mt1 = g_data_mt%dvec_mt
@@ -1534,7 +1909,7 @@ subroutine CALRMS_MT(g_data_mt,h_data_mt,Cd_mt,misfit_mt,nrms_mt)
   dvec_mt  = dvec_mt2 - dvec_mt1
   
   !# check
-  if (.false.) then
+  if (.true.) then
    write(*,'(5x,a)') " obs          |  cal         | d^2           | d^2/e^2"
    write(*,*) "ndat1"
    do i=1,ndat_mt1
@@ -1548,9 +1923,13 @@ subroutine CALRMS_MT(g_data_mt,h_data_mt,Cd_mt,misfit_mt,nrms_mt)
   do i=1,ndat_mt
    misfit_mt = misfit_mt + dvec_mt(i)**2.d0 / Cd_mt%val(i) ! dvec(i)**2/err(i)**2
   end do
-  nrms_mt = sqrt(misfit_mt/dble(ndat_mt)) ! 2017.12.22
-  misfit_mt = 0.5d0 * misfit_mt ! 2017.12.22
-  
+  if (ndat_mt .eq. 0) then !2026.03.09
+   nrms_mt = 0.d0
+  else                     !2026.03.09
+   nrms_mt = sqrt(misfit_mt/dble(ndat_mt)) ! 2017.12.22
+   misfit_mt = 0.5d0 * misfit_mt ! 2017.12.22
+  end if                   ! 2026.03.09
+
   write(*,'(a,g15.7)') "            RMS_MT =",misfit_mt ! 2020.09.18
   write(*,'(a,g15.7)') " Normarized RMS_MT =",nrms_mt   ! 2020.09.18
   call watchstop(t_watch) ! 2017.12.22
@@ -1563,18 +1942,73 @@ subroutine CALRMS_MT(g_data_mt,h_data_mt,Cd_mt,misfit_mt,nrms_mt)
   stop
   
   end subroutine
-!############################################## subroutine GENDVEC_MT
-!# coded on 2021.01.04
+!############################################## CALRMS_TIP !2023.12.25
+subroutine CALRMS_TIP(g_data_mt,h_data_mt,Cd_tip,misfit_tip,nrms_tip)!2023.12.25
+  use param_jointinv
+  use matrix
+  use caltime ! 2017.12.22
+  type(real_crs_matrix),intent(in)     :: Cd_tip
+  type(data_vec_mt),    intent(in)     :: g_data_mt ! obs tmp and tipper
+  type(data_vec_mt),    intent(in)     :: h_data_mt ! cal tmp and tipper
+  real(8),              intent(out)    :: misfit_tip,nrms_tip
+  real(8),allocatable,dimension(:)     :: dvec_tip1,dvec_tip2,dvec_tip
+  integer(4)                           :: ndat_tip,ndat_tip1,ndat_tip2,i
+  real(8)                              :: d ! 2017.09.06
+  type(watch) :: t_watch ! 2017.12.22
+  
+  call watchstart(t_watch) ! 2017.12.22
+  !#[0]## set
+  ndat_tip  = g_data_mt%ndat_tipper
+  ndat_tip1 = h_data_mt%ndat_tipper
+  ndat_tip2 = Cd_tip%ntot
+  if (ndat_tip .ne. ndat_tip1 .or. ndat_tip .ne. ndat_tip2 ) goto 99
+  allocate(dvec_tip1(ndat_tip),dvec_tip2(ndat_tip),dvec_tip(ndat_tip))
+  dvec_tip1 = g_data_mt%dvec_tipper  ! observation
+  dvec_tip2 = h_data_mt%dvec_tipper  ! calculation
+  dvec_tip  = dvec_tip2 - dvec_tip1  ! residual
+  
+  !# check
+  if (.false.) then
+   write(*,'(5x,a)') " obs          |  cal         | d^2           | d^2/e^2"
+   write(*,*) "ndat1"
+   do i=1,ndat_tip1
+    d = dvec_tip2(i)-dvec_tip1(i)
+    write(*,'(i5,4g15.7)') i,dvec_tip1(i),dvec_tip2(i),d**2.d0,d**2.d0/Cd_tip%val(i)
+   end do
+  end if
+  
+  !#[1]## cal rms
+  misfit_tip = 0.d0
+  do i=1,ndat_tip
+   misfit_tip = misfit_tip + dvec_tip(i)**2.d0 / Cd_tip%val(i) ! dvec(i)**2/err(i)**2
+  end do
+  nrms_tip = sqrt(misfit_tip/dble(ndat_tip)) ! 2017.12.22
+  misfit_tip = 0.5d0 * misfit_tip ! 2017.12.22
+  
+  write(*,'(a,g15.7)') "            RMS_TIPPER =",misfit_tip ! 2020.09.18
+  write(*,'(a,g15.7)') " Normarized RMS_TIPPER =",nrms_tip   ! 2020.09.18
+  call watchstop(t_watch) ! 2017.12.22
+
+  write(*,'(a)') " ### CALRMS_TIP END!! ###" ! Time=",t_watch%time," [min]"! 2020.09.29
+  
+  return
+  99 continue
+  write(*,*) "GEGEGE! ndat_tip",ndat_tip,".ne. ndat_tip1",ndat_tip1,"or .ne. ndat_tip2",ndat_tip2
+  stop
+  
+  end subroutine
+
+!############################################## GENDVEC_MT
 subroutine GENDVEC_MT(g_param_joint,timp_mt,nfreq_mt,h_data_mt) !2018.10.08
   use param_jointinv ! 2016.06.08
   use outresp     ! 2016.06.08
   implicit none
-  integer(4),                    intent(in)     :: nfreq_mt
-  type(param_joint),             intent(in)     :: g_param_joint ! 2017.09.04
-  type(respmt),                  intent(in)     :: timp_mt(nfreq_mt)! 2022.01.04
-  type(data_vec_mt),             intent(inout)  :: h_data_mt     ! cal data
-  logical,allocatable, dimension(:,:,:,:)       :: data_avail_mt    ! 2018.10.05
-  integer(4) :: iobs,i1,i2,ii,ifreq,i,isr,icomp,l,nobs_mt         ! 2017.09.03
+  integer(4),             intent(in)     :: nfreq_mt
+  type(param_joint),      intent(in)     :: g_param_joint ! 2017.09.04
+  type(respmt),           intent(in)     :: timp_mt(nfreq_mt)! 2022.01.04
+  type(data_vec_mt),      intent(inout)  :: h_data_mt      ! cal data
+  logical,allocatable, dimension(:,:,:,:):: data_avail_mt  ! 2018.10.05
+  integer(4) :: iobs,i1,i2,ii,ifreq,i,isr,icomp,l,nobs_mt  ! 2017.09.03
   complex(8) :: c
   !#[0]## set amp and phase of bz
     nobs_mt       = g_param_joint%nobs_mt        ! 2022.01.04
@@ -1583,6 +2017,7 @@ subroutine GENDVEC_MT(g_param_joint,timp_mt,nfreq_mt,h_data_mt) !2018.10.08
     
   !#[1]## cal g_data
   ii=0
+  !if (h_data_mt%ndat_mt .ne. 0) then ! 2026.03.12
   do ifreq=1,nfreq_mt
     do iobs=1,nobs_mt
      do icomp =1,4  ! zxx,zxy,zyx,zyy
@@ -1595,13 +2030,13 @@ subroutine GENDVEC_MT(g_param_joint,timp_mt,nfreq_mt,h_data_mt) !2018.10.08
         ii = ii + 1
         if ( l .eq. 1) h_data_mt%dvec_mt(ii)  = real(c) ! 2018.10.05
         if ( l .eq. 2) h_data_mt%dvec_mt(ii)  = imag(c) ! 2018.10.05
-     !   write(6,*)h_data_mt%dvec_mt(ii),"imp!!!"
        end if
       end do ! l loop
      end do ! icomp     2018.10.05
     end do  ! nobs
   end do    ! nfreq     2017.09.03
-  
+  !end if  
+
   !#[2]## out
   if (.false.) then
    do i=1,h_data_mt%ndat_mt
@@ -1612,29 +2047,74 @@ subroutine GENDVEC_MT(g_param_joint,timp_mt,nfreq_mt,h_data_mt) !2018.10.08
   write(*,*) "### GENDVEC_MT END!! ###"
   return
   end subroutine
-!############################################## subroutine GENDVEC_AP
-!# modified for multiple component on 2018.10.05
-!# modified for multiple sources   on 2017.09.04
-!# modified on 2017.06.08
-subroutine GENDVEC_AP(g_param_joint,nsr_inv,tresp,nfreq,g_data_ap,g_data) !2018.10.08
-use param_jointinv ! 2016.06.08
-use outresp     ! 2016.06.08
-implicit none
-integer(4),                          intent(in)     :: nfreq
-integer(4),                          intent(in)     :: nsr_inv       ! 2017.09.04
-type(param_joint),             intent(in)     :: g_param_joint ! 2017.09.04
-type(data_vec_ap),                   intent(in)     :: g_data        ! 2018.10.08 obs data
-type(respdata),                      intent(in)     :: tresp(5,nsr_inv,nfreq) ! 2017.09.03
-type(data_vec_ap),                   intent(inout)  :: g_data_ap     ! cal data
-real(8),         allocatable, dimension(:,:,:,:)    :: ampbe,phabe   ! 2018.10.05
-logical,         allocatable, dimension(:,:,:,:,:)  :: data_avail    ! 2018.10.05
-integer(4) :: iobs,i1,i2,ii,ifreq,i,isr,l,nobs         ! 2017.09.03
-real(8)    :: amp,phase
-integer(4) :: icomp         ! 2018.10.05
-integer(4) :: iflag_comp(5) ! 2018.10.05
-real(8)    :: pha0,pha1     ! 2018.10.08
+!############################################## GENDVEC_TIP
+subroutine GENDVEC_TIP(g_param_joint,ttip_mt,nfreq_mt,h_data_mt) !2023.12.25
+  use param_jointinv ! 2016.06.08
+  use outresp     ! 2016.06.08
+  implicit none
+  integer(4),             intent(in)     :: nfreq_mt
+  type(param_joint),      intent(in)     :: g_param_joint ! 2017.09.04
+  type(resptip),          intent(in)     :: ttip_mt(nfreq_mt) ! 2022.01.04
+  type(data_vec_mt),      intent(inout)  :: h_data_mt         ! cal data
+  logical,allocatable, dimension(:,:,:,:):: data_avail_tipper ! 2018.10.05
+  integer(4) :: iobs,i1,i2,ii,ifreq,i,isr,icomp,l,nobs_mt     ! 2017.09.03
+  complex(8) :: c
+  !#[0]## set amp and phase of bz
+    nobs_mt       = g_param_joint%nobs_mt               ! 2022.01.04
+    allocate(data_avail_tipper(2,2,nobs_mt,nfreq_mt))       ! 2022.01.04
+    data_avail_tipper = g_param_joint%data_avail_tipper ! 2023.12.25
+    
+  !#[1]## cal g_data
+  ii=0
+  do ifreq=1,nfreq_mt
+    do iobs=1,nobs_mt
+     do icomp =1,2  ! tx, ty
+      if (icomp .eq. 1) c=ttip_mt(ifreq)%tx(iobs)
+      if (icomp .eq. 2) c=ttip_mt(ifreq)%ty(iobs)
+      do l=1,2   ! real,phase
+       if ( data_avail_tipper(l,icomp,iobs,ifreq) ) then ! 2023.12.25
+        ii = ii + 1
+        if ( l .eq. 1) h_data_mt%dvec_tipper(ii)  = real(c) ! 2023.12.25
+        if ( l .eq. 2) h_data_mt%dvec_tipper(ii)  = imag(c) ! 2023.12.25
+       end if
+      end do ! l loop
+     end do ! icomp     2018.10.05
+    end do  ! nobs
+  end do    ! nfreq     2017.09.03
+  
+  !#[2]## out
+  if (.false.) then
+   do i=1,h_data_mt%ndat_tipper
+    write(*,*) i,"h_data_mt%dvec_tipper=",h_data_mt%dvec_tipper(i)
+   end do
+  end if
+  
+  write(*,*) "### GENDVEC_TIP END!! ###"
+  return
+  end subroutine
 
-!#[0]## set amp and phase of bz
+!############################################## subroutine GENDVEC_AP
+subroutine GENDVEC_AP(g_param_joint,nsr_inv,tresp,nfreq,g_data_ap,g_data) 
+ !#  modified for multiple component on 2018.10.05
+ ! declaration
+   use param_jointinv ! 2016.06.08
+   use outresp     ! 2016.06.08
+   implicit none
+   integer(4),                          intent(in)     :: nfreq
+   integer(4),                          intent(in)     :: nsr_inv       ! 2017.09.04
+   type(param_joint),             intent(in)     :: g_param_joint ! 2017.09.04
+   type(data_vec_ap),                   intent(in)     :: g_data        ! 2018.10.08 obs data
+   type(respdata),                      intent(in)     :: tresp(5,nsr_inv,nfreq) ! 2017.09.03
+   type(data_vec_ap),                   intent(inout)  :: g_data_ap     ! cal data
+   real(8),         allocatable, dimension(:,:,:,:)    :: ampbe,phabe   ! 2018.10.05
+   logical,         allocatable, dimension(:,:,:,:,:)  :: data_avail    ! 2018.10.05
+   integer(4) :: iobs,i1,i2,ii,ifreq,i,isr,l,nobs         ! 2017.09.03
+   real(8)    :: amp,phase
+   integer(4) :: icomp         ! 2018.10.05
+   integer(4) :: iflag_comp(5) ! 2018.10.05
+   real(8)    :: pha0,pha1     ! 2018.10.08
+
+ !#[0]## set amp and phase of bz
   nobs       = g_param_joint%nobs              ! 2017.09.04
   allocate(data_avail(2,5,nfreq,nobs,nsr_inv)) ! 2017.07.14
   data_avail = g_data_ap%data_avail            ! 2017.09.03
@@ -1652,104 +2132,124 @@ real(8)    :: pha0,pha1     ! 2018.10.08
    end do             ! 2017.09.03
   end do
 
-!write(*,'(2i5,g15.7)') ((iobs,ifreq,ampbz(iobs,ifreq),ifreq=1,nfreq),iobs=1,nobs)
+  !write(*,'(2i5,g15.7)') ((iobs,ifreq,ampbz(iobs,ifreq),ifreq=1,nfreq),iobs=1,nobs)
 
-!#[1]## cal g_data
-ii=0
-do ifreq=1,nfreq
- do isr=1,nsr_inv ! 2017.09.03
-  do iobs=1,nobs
-   do icomp =1,5  ! 2018.10.05
-    do l=1,2   ! amp,phase 2017.09.03
-    if ( data_avail(l,icomp,ifreq,iobs,isr) ) then ! 2017.09.04
-    ii = ii + 1
-    if (l .eq. 1) then       ! amp   2017.09.03
-!     write(*,'(a,4i5,1x,a,g15.7)') "icomp,iobs,ifreq,isr",icomp,iobs,ifreq,isr,"amp",ampbe(icomp,iobs,ifreq,isr)!2020.09.18
-     g_data_ap%dvec(ii)  = dlog10(ampbe(icomp,iobs,ifreq,isr)) ! 2018.10.05
-    else if ( l .eq. 2) then ! phase 2017.09.03
-     pha1                = phabe(icomp,iobs,ifreq,isr)  ! 2018.10.08
-     pha0                = g_data%dvec(ii)              ! 2018.10.08
-     if ( abs( pha0 - pha1) .gt. abs(pha0 - (pha1+360.d0)) ) then      ! 2018.10.08
-      pha1 = pha1 + 360.d0                                             ! 2018.10.08
-     else if ( abs( pha0 - pha1) .gt. abs(pha0 - (pha1-360.d0)) ) then ! 2018.10.08
-      pha1 = pha1 - 360.d0       ! 2018.10.08
-     end if                      ! 2018.10.08
-     g_data_ap%dvec(ii)  = pha1  ! 2018.10.08
-    end if
+ !#[1]## cal g_data
+   ii=0
+   do ifreq=1,nfreq
+     do isr=1,nsr_inv ! 2017.09.03
+       do iobs=1,nobs
+         do icomp =1,5  ! 2018.10.05
+           do l=1,2   ! amp,phase 2017.09.03
+             if ( data_avail(l,icomp,ifreq,iobs,isr) ) then ! 2017.09.04
+               ii = ii + 1
+               if (l .eq. 1) then       ! amp   2017.09.03
+                 !     write(*,'(a,4i5,1x,a,g15.7)') "icomp,iobs,ifreq,isr",icomp,iobs,ifreq,isr,"amp",ampbe(icomp,iobs,ifreq,isr)!2020.09.18
+                 g_data_ap%dvec(ii)  = dlog10(ampbe(icomp,iobs,ifreq,isr)) ! 2018.10.05
+               else if ( l .eq. 2) then ! phase 2017.09.03
+                 pha1   = phabe(icomp,iobs,ifreq,isr)  ! 2018.10.08
+                 pha0   = g_data%dvec(ii)              ! 2018.10.08
+                 if ( abs( pha0 - pha1) .gt. abs(pha0 - (pha1+360.d0)) ) then      ! 2018.10.08
+                   pha1 = pha1 + 360.d0                                             ! 2018.10.08
+                 else if ( abs( pha0 - pha1) .gt. abs(pha0 - (pha1-360.d0)) ) then ! 2018.10.08
+                   pha1 = pha1 - 360.d0       ! 2018.10.08
+                 end if                      ! 2018.10.08
+                 g_data_ap%dvec(ii)  = pha1  ! 2018.10.08
+               end if
+             end if
+           end do ! amp phase 2017.09.03
+         end do ! icomp     2018.10.05
+       end do  ! nobs
+     end do   ! nsr_inv   2017.09.03
+   end do    ! nfreq     2017.09.03
+
+ !#[2]## out
+   if (.false.) then
+     do i=1,g_data_ap%ndat
+       write(*,*) i,"g_data_ap%dvec=",g_data_ap%dvec(i)
+     end do
    end if
-   end do ! amp phase 2017.09.03
-   end do ! icomp     2018.10.05
-  end do  ! nobs
- end do   ! nsr_inv   2017.09.03
-end do    ! nfreq     2017.09.03
 
-!#[2]## out
-if (.false.) then
- do i=1,g_data_ap%ndat
-  write(*,*) i,"g_data_ap%dvec=",g_data_ap%dvec(i)
- end do
-end if
-
-write(*,*) "### GENDVEC_AP END!! ###"
-return
-end subroutine
+ write(*,*) "### GENDVEC_AP END!! ###"
+ return
+ end subroutine
 
 !############################################## subroutine GENCD_AP
-! Modified on 2017.09.04
-! Coded on May 13, 2017
-subroutine GENCD(g_data_ap,g_data_mt,CD,CD_mt) ! 2021.12.29
-use matrix
-use param_jointinv ! 2017.09.04
-implicit none
-type(data_vec_ap),      intent(in)  :: g_data_ap
-type(data_vec_mt),      intent(in)  :: g_data_mt ! 2021.12.29
-type(real_crs_matrix),  intent(out) :: CD, CD_mt ! 2021.12.29
-real(8),allocatable,dimension(:)    :: error,error_mt ! 2021.12.29
-integer(4) :: ndat,i
-integer(4) :: ndat_mt
+subroutine GENCD(g_data_ap,g_data_mt,CD,CD_mt,CD_tipper) ! 2021.12.29
+ ! Modified on 2017.09.04
+ ! Coded on May 13, 2017
+ ! Tipper is added on 2023.12.21
+ !# declaration
+  use matrix
+  use param_jointinv ! 2017.09.04
+  implicit none
+  type(data_vec_ap),      intent(in)  :: g_data_ap
+  type(data_vec_mt),      intent(in)  :: g_data_mt ! 2021.12.29
+  type(real_crs_matrix),  intent(out) :: CD, CD_mt, CD_tipper ! 2021.12.29
+  real(8),allocatable,dimension(:)    :: error,error_mt,error_tipper ! 2023.12.21
+  integer(4) :: ndat,i
+  integer(4) :: ndat_mt,ndat_tipper ! 2023.12.21
 
-!#[1]# set
-ndat    = g_data_ap%ndat
-ndat_mt = g_data_mt%ndat_mt
-write(*,*) "ndat_active=",ndat,"ndat_mt=",ndat_mt ! 2021.12.29
-allocate(error(ndat),error_mt(ndat_mt)) ! 2021.12.29
-error    = g_data_ap%error
-error_mt = g_data_mt%error_mt ! 2021.12.29
+ !#[1]# set
+  ndat    = g_data_ap%ndat
+  ndat_mt = g_data_mt%ndat_mt
+  ndat_tipper = g_data_mt%ndat_tipper ! 2023.12.21
+  write(*,*) "ndat_active=",ndat
+  write(*,*) "ndat_mt    =",ndat_mt ! 2021.12.29
+  write(*,*) "ndat_tipper=",ndat_tipper ! 2023.12.21
+  allocate(error(ndat),error_mt(ndat_mt),error_tipper(ndat_tipper)) ! 2021.12.29
+  error        = g_data_ap%error
+  error_mt     = g_data_mt%error_mt     ! 2021.12.29
+  error_tipper = g_data_mt%error_tipper ! 2023.12.21
 
-!#[2]## gen Cd : diagonal matrix
-CD%nrow  = ndat   ; CD_mt%nrow  = ndat_mt  
-CD%ncolm = ndat   ; CD_mt%ncolm = ndat_mt   
-CD%ntot  = ndat   ; CD_mt%ntot  = ndat_mt   
-allocate(CD%stack(0:ndat),CD%item(ndat),CD%val(ndat))
-allocate(CD_mt%stack(0:ndat_mt),CD_mt%item(ndat_mt),CD_mt%val(ndat_mt)) ! 2021.12.29
-CD%stack(0)=0
-do i=1,ndat
- CD%val(i)   = (error(i))**2.d0
- CD%stack(i) = i
- CD%item(i)  = i
-end do
-!
-CD_mt%stack(0)=0
-do i=1,ndat_mt
-  CD_mt%val(i)   = (error_mt(i))**2.d0
-  CD_mt%stack(i) = i
-  CD_mt%item(i)  = i
- end do
- 
-write(*,*) "### GENCD END!! ###" ! 2021.12.29
-return
-end
+ !#[2]## gen Cd : diagonal matrix
+  CD%nrow  = ndat   ; CD_mt%nrow  = ndat_mt  
+  CD%ncolm = ndat   ; CD_mt%ncolm = ndat_mt   
+  CD%ntot  = ndat   ; CD_mt%ntot  = ndat_mt
+  CD_tipper%nrow  = ndat_tipper ! 2023.12.21 
+  CD_tipper%ncolm = ndat_tipper ! 2023.12.21    
+  CD_tipper%ntot  = ndat_tipper ! 2023.12.21
+     
+  allocate(CD%stack(0:ndat),CD%item(ndat),CD%val(ndat))
+  CD%stack(0)=0
+  do i=1,ndat
+   CD%val(i)   = (error(i))**2.d0
+   CD%stack(i) = i
+   CD%item(i)  = i
+  end do
 
+ !#[3]## gen Cd_mt
+   allocate(CD_mt%stack(0:ndat_mt),CD_mt%item(ndat_mt),CD_mt%val(ndat_mt)) ! 2021.12.29
+   CD_mt%stack(0)=0
+   do i=1,ndat_mt
+     CD_mt%val(i)   = (error_mt(i))**2.d0
+     CD_mt%stack(i) = i
+     CD_mt%item(i)  = i
+   end do
+
+ !#[3]## gen Cd_tipper 2026.02.27
+   allocate(CD_tipper%stack(0:ndat_tipper),CD_tipper%item(ndat_tipper),CD_tipper%val(ndat_tipper)) ! 2023.12.21
+   CD_tipper%stack(0)=0
+   do i=1,ndat_tipper ! ndat_tipper = (real,imag)*(Tx,Ty)*nobs_mt*nfreq_mt, error is given directly for real and imag
+     CD_tipper%val(i)   = error_tipper(i)**2.d0 ! 2026.05.27 fixed
+     CD_tipper%stack(i) = i
+     CD_tipper%item(i)  = i
+   end do
+
+
+
+ write(*,*) "### GENCD END!! ###" ! 2021.12.29
+ return
+ end
 
 !############################################## subroutine setNPHYS1INDEX2COND
-!Coded on 2017.05.12
 subroutine SETNPHYS1INDEX2COND(g_mesh,g_cond)
-use param
-use mesh_type
-implicit none
-type(mesh),      intent(in)    :: g_mesh
-type(param_cond),intent(inout) :: g_cond
-integer(4) :: nphys1,nphys2,i,ntet
+ use param
+ use mesh_type
+ implicit none
+ type(mesh),      intent(in)    :: g_mesh
+ type(param_cond),intent(inout) :: g_cond
+ integer(4) :: nphys1,nphys2,i,ntet
 
   nphys2        = g_cond%nphys2 ! # of elements in 2nd physical volume (land)
   nphys1        = g_mesh%ntet - nphys2
@@ -1761,164 +2261,162 @@ integer(4) :: nphys1,nphys2,i,ntet
    g_cond%index(i) = nphys1 +i ! element id for whole element space
   end do
 
-return
-end
+ return
+ end
 
-!###################################################################
-! copied from n_ebfem_bxyz.f90 on 2017.05.10
+!############################################## GENXYZMINMAX
 subroutine GENXYZMINMAX(em_mesh,g_param)
-use param ! 2016.11.20
-use mesh_type
-implicit none
-type(mesh),            intent(inout) :: em_mesh
-type(param_forward),   intent(inout) :: g_param
-real(8) :: xmin,xmax,ymin,ymax,zmin,zmax
-real(8) :: xyz(3,em_mesh%node),xyzminmax(6)
-integer(4) :: i
-!write(6,*)"done2"
-xyz = em_mesh%xyz ! normal
-xmin=xyz(1,1) ; xmax=xyz(1,1)
-ymin=xyz(2,1) ; ymax=xyz(2,1)
-zmin=xyz(3,1) ; zmax=xyz(3,1)
+ use param ! 2016.11.20
+ use mesh_type
+ implicit none
+ type(mesh),            intent(inout) :: em_mesh
+ type(param_forward),   intent(inout) :: g_param
+ real(8) :: xmin,xmax,ymin,ymax,zmin,zmax
+ real(8) :: xyz(3,em_mesh%node),xyzminmax(6)
+ integer(4) :: i
+ xyz = em_mesh%xyz ! normal
+ xmin=xyz(1,1) ; xmax=xyz(1,1)
+ ymin=xyz(2,1) ; ymax=xyz(2,1)
+ zmin=xyz(3,1) ; zmax=xyz(3,1)
 
-do i=1,em_mesh%node
- xmin=min(xmin,xyz(1,i))
- xmax=max(xmax,xyz(1,i))
- ymin=min(ymin,xyz(2,i))
- ymax=max(ymax,xyz(2,i))
- zmin=min(zmin,xyz(3,i))
- zmax=max(zmax,xyz(3,i))
-end do
+ do i=1,em_mesh%node
+   xmin=min(xmin,xyz(1,i))
+   xmax=max(xmax,xyz(1,i))
+   ymin=min(ymin,xyz(2,i))
+   ymax=max(ymax,xyz(2,i))
+   zmin=min(zmin,xyz(3,i))
+   zmax=max(zmax,xyz(3,i))
+ end do
 
-xyzminmax(1:6)=(/xmin,xmax,ymin,ymax,zmin,zmax/)
+ xyzminmax(1:6)=(/xmin,xmax,ymin,ymax,zmin,zmax/)
 
-!# set output
-g_param%xyzminmax = xyzminmax
-em_mesh%xyzminmax = xyzminmax    ! 2021.12.27
+ !# set output
+   g_param%xyzminmax = xyzminmax
+   em_mesh%xyzminmax = xyzminmax    ! 2021.12.27
 
-write(*,*) "### GENXYZMINMAX END!! ###"
-return
-end
-!########################################### OUTMODEL
-! modified on 2017.12.20
+ write(*,*) "### GENXYZMINMAX END!! ###"
+ return
+ end
+!############################################## OUTMODEL
 subroutine OUTMODEL(g_param_joint,g_model,g_mesh,ite,ialpha)! 2017.09.11
-use mesh_type
-use modelpart
-use param_jointinv ! 2017.08.31
-use caltime     ! 2017.12.25
-implicit none
-integer(4),              intent(in) :: ite,ialpha       ! 2017.09.11
-type(param_joint),       intent(in) :: g_param_joint    ! 2017.08.31
-type(model),             intent(in) :: g_model
-type(mesh),              intent(in) :: g_mesh
-character(50)                       :: modelfile, head   ! 2017.12.20
-character(50)                       :: connectfile      ! 2017.12.20
-integer(4)                          :: i,j,nphys2,nmodel,npoi,nlin,ntri,ishift
-real(8),   allocatable,dimension(:) :: rho_model, logrho_model
-integer(4),allocatable,dimension(:) :: ele2model,index
-integer(4)   :: ialphaflag,nhead  ! 2017.09.11
-character(2) :: num
-character(1) :: num2              ! 2017.09.11
-type(watch)  :: t_watch           ! 2017.12.25
+ ! modified on 2017.12.20
+ use mesh_type
+ use modelpart
+ use param_jointinv ! 2017.08.31
+ use caltime     ! 2017.12.25
+ implicit none
+ integer(4),              intent(in) :: ite,ialpha       ! 2017.09.11
+ type(param_joint),       intent(in) :: g_param_joint    ! 2017.08.31
+ type(model),             intent(in) :: g_model
+ type(mesh),              intent(in) :: g_mesh
+ character(50)                       :: modelfile, head   ! 2017.12.20
+ character(50)                       :: connectfile      ! 2017.12.20
+ integer(4)                          :: i,j,nphys2,nmodel,npoi,nlin,ntri,ishift
+ real(8),   allocatable,dimension(:) :: rho_model, logrho_model
+ integer(4),allocatable,dimension(:) :: ele2model,index
+ integer(4)   :: ialphaflag,nhead  ! 2017.09.11
+ character(2) :: num
+ character(1) :: num2              ! 2017.09.11
+ type(watch)  :: t_watch           ! 2017.12.25
 
-call watchstart(t_watch) ! 2017.12.25
-!#[0]## set
-head         = g_param_joint%outputfolder ! 2017.09.03
-nhead        = len_trim(head)             ! 2017.09.11
-nphys2       = g_model%nphys2
-nmodel       = g_model%nmodel
-allocate(index(nphys2),rho_model(nmodel),ele2model(nphys2))
-allocate(logrho_model(nmodel))
-index        = g_model%index
-rho_model    = g_model%rho_model
-logrho_model = g_model%logrho_model
-ele2model    = g_model%ele2model
-npoi         = g_mesh%npoi
-nlin         = g_mesh%nlin
-ntri         = g_mesh%ntri
-ialphaflag   = g_param_joint%ialphaflag            ! 2017.09.11
+ call watchstart(t_watch) ! 2017.12.25
+ !#[0]## set
+ head         = g_param_joint%outputfolder ! 2017.09.03
+ nhead        = len_trim(head)             ! 2017.09.11
+ nphys2       = g_model%nphys2
+ nmodel       = g_model%nmodel
+ allocate(index(nphys2),rho_model(nmodel),ele2model(nphys2))
+ allocate(logrho_model(nmodel))
+ index        = g_model%index
+ rho_model    = g_model%rho_model
+ logrho_model = g_model%logrho_model
+ ele2model    = g_model%ele2model
+ npoi         = g_mesh%npoi
+ nlin         = g_mesh%nlin
+ ntri         = g_mesh%ntri
+ ialphaflag   = g_param_joint%ialphaflag            ! 2017.09.11
  if ( ialphaflag .eq. 1 .and. ialpha .ne. 0 ) then ! L-curve 2017.09.11
   write(num2,'(i1)')  ialpha ! 2017.09.11
   head      = head(1:nhead)//"a"//num2(1:1)//"/"
   nhead     = len_trim(head)
  end if
 
-!#[1]## when ite = 0, output connection from nmodel to nphys2
+ !#[1]## when ite = 0, output connection from nmodel to nphys2
  if ( ite .eq. 0 ) then
-  connectfile=head(1:nhead)//"model_connect.dat"
-  open(1,file=connectfile)
-  write(1,'(2i10)') nphys2,nmodel
-  ishift = npoi + nlin + ntri
-  do i=1,nphys2
-   write(1,'(2i10)')  ishift+index(i),ele2model(i)
-  end do
-  close(1)
+   connectfile=head(1:nhead)//"model_connect.dat"
+   open(1,file=connectfile)
+   write(1,'(2i10)') nphys2,nmodel
+   ishift = npoi + nlin + ntri
+   do i=1,nphys2
+     write(1,'(2i10)')  ishift+index(i),ele2model(i)
+   end do
+   close(1)
  end if
 
-!#[3]## output rho
- write(num,'(i2.2)') ite
- modelfile =head(1:nhead)//"model"//num(1:2)//".dat" ! 2017.12.20
- open(1,file=modelfile)       ! 2017.12.20
-  write(1,'(i10)') nmodel
-  do j=1,nmodel
-!   if (ite .eq. 2 ) write(*,*) "j",j,"logrho_model(j)",logrho_model(j) ! 2017.12.22 check
-   write(1,'(e15.7)') 10**logrho_model(j) !2017.12.20
-  end do
- close(1)
+ !#[3]## output rho
+   write(num,'(i2.2)') ite
+   modelfile =head(1:nhead)//"model"//num(1:2)//".dat" ! 2017.12.20
+   open(1,file=modelfile)       ! 2017.12.20
+   write(1,'(i10)') nmodel
+   do j=1,nmodel
+     !   if (ite .eq. 2 ) write(*,*) "j",j,"logrho_model(j)",logrho_model(j) ! 2017.12.22 check
+     write(1,'(e15.7)') 10**logrho_model(j) !2017.12.20
+   end do
+   close(1)
 
-call watchstop(t_watch) ! 2017.12.25
-write(*,'(a,f9.4,a)') " ### OUTMODEL END!! ### Time =",t_watch%time," [min]"!2020.09.18
-return
-end
-!########################################### OUTCOND
-! Output folder is changed on 2017.09.04
-! Coded on 2017.05.18
+ call watchstop(t_watch) ! 2017.12.25
+ write(*,'(a,f9.4,a)') " ### OUTMODEL END!! ### Time =",t_watch%time," [min]"!2020.09.18
+ return
+ end
+!############################################## OUTCOND
 subroutine OUTCOND(g_param_joint,g_cond,g_mesh,ite,ialpha) ! 2017.09.11
-use mesh_type
-use param
-use param_jointinv ! 2017.09.04
-implicit none
-integer(4),             intent(in) :: ite,ialpha    ! 2017.09.11
-type(param_joint),intent(in) :: g_param_joint ! 2017.09.04
-type(param_cond),       intent(in) :: g_cond
-type(mesh),             intent(in) :: g_mesh
-character(50) :: condfile,head ! 2017.07.25
-integer(4) :: j, nphys2,nmodel,npoi,nlin,ntri,ishift,nphys1
-real(8),allocatable,dimension(:)    :: rho,sigma
-integer(4),allocatable,dimension(:) :: index
-integer(4)   :: nhead ! 2017.09.11
-character(2) :: num
-character(1) :: num2       ! 2017.09.11
-integer(4)   :: ialphaflag ! 2017.09.11
+ ! Output folder is changed on 2017.09.04
+ ! Coded on 2017.05.18
+ use mesh_type
+ use param
+ use param_jointinv ! 2017.09.04
+ implicit none
+ integer(4),             intent(in) :: ite,ialpha    ! 2017.09.11
+ type(param_joint),intent(in) :: g_param_joint ! 2017.09.04
+ type(param_cond),       intent(in) :: g_cond
+ type(mesh),             intent(in) :: g_mesh
+ character(50) :: condfile,head ! 2017.07.25
+ integer(4) :: j, nphys2,nmodel,npoi,nlin,ntri,ishift,nphys1
+ real(8),allocatable,dimension(:)    :: rho,sigma
+ integer(4),allocatable,dimension(:) :: index
+ integer(4)   :: nhead ! 2017.09.11
+ character(2) :: num
+ character(1) :: num2       ! 2017.09.11
+ integer(4)   :: ialphaflag ! 2017.09.11
 
-!#[0]## set
-head         = g_param_joint%outputfolder ! 2017.09.04
-nhead        = len_trim(head) ! 2017.09.11s
-nphys1       = g_cond%nphys1
-nphys2       = g_cond%nphys2
-allocate(index(nphys2),rho(nphys2),sigma(nphys2))
-index        = g_cond%index
-rho          = g_cond%rho
-sigma        = g_cond%sigma
-npoi         = g_mesh%npoi
-nlin         = g_mesh%nlin
-ntri         = g_mesh%ntri
-ialphaflag   = g_param_joint%ialphaflag ! 2017.09.11
-write(*,*) "nphys1=",nphys1
-write(*,*) "nphys2=",nphys2
-write(num,'(i2.2)') ite
- if ( ialphaflag .eq. 1 .and. ialpha .ne. 0 ) then ! L-curve 2017.09.11
-  write(num2,'(i1)')  ialpha ! 2017.09.11
-  head      = head(1:nhead)//"a"//num2(1:1)//"/"
-  nhead     = len_trim(head)
+ !#[0]## set
+ head         = g_param_joint%outputfolder ! 2017.09.04
+ nhead        = len_trim(head) ! 2017.09.11s
+ nphys1       = g_cond%nphys1
+ nphys2       = g_cond%nphys2
+ allocate(index(nphys2),rho(nphys2),sigma(nphys2))
+ index        = g_cond%index
+ rho          = g_cond%rho
+ sigma        = g_cond%sigma
+ npoi         = g_mesh%npoi
+ nlin         = g_mesh%nlin
+ ntri         = g_mesh%ntri
+ ialphaflag   = g_param_joint%ialphaflag ! 2017.09.11
+ write(*,*) "nphys1=",nphys1
+ write(*,*) "nphys2=",nphys2
+ write(num,'(i2.2)') ite
+  if ( ialphaflag .eq. 1 .and. ialpha .ne. 0 ) then ! L-curve 2017.09.11
+    write(num2,'(i1)')  ialpha ! 2017.09.11
+    head      = head(1:nhead)//"a"//num2(1:1)//"/"
+    nhead     = len_trim(head)
  end if
 
-!#[1]## output rho
- condfile = head(1:nhead)//"cond"//num(1:2)//".msh"
- open(1,file=condfile)
+ !#[1]## output rho
+  condfile = head(1:nhead)//"cond"//num(1:2)//".msh"
+  open(1,file=condfile)
 
  !# standard info
-! CALL MESHOUT(1,g_mesh)
+ ! CALL MESHOUT(1,g_mesh)
 
  write(1,'(a)') "$MeshFormat"     ! 2017.09.13
  write(1,'(a)') "2.2 0 8"        ! 2017.09.13
@@ -1934,97 +2432,96 @@ write(num,'(i2.2)') ite
  write(1,'(i10)') nphys2
  ishift = npoi + nlin + ntri
  do j=1,nphys2
-!  write(*,*) "j=",j,"nphys2=",nphys2,"ele2model(j)=",ele2model(j),"nmodel=",nmodel
-  write(1,*) ishift+index(j),1.d0/sigma(j)
+   !  write(*,*) "j=",j,"nphys2=",nphys2,"ele2model(j)=",ele2model(j),"nmodel=",nmodel
+   write(1,*) ishift+index(j),1.d0/sigma(j)
  end do
  write(1,'(a)') "$EndElementData"
-close(1)
+ close(1)
 
-write(*,*) "### OUTCOND END!! ###"
-return
-end
+ write(*,*) "### OUTCOND END!! ###"
+ return
+ end
 !####################################################### PREPOBSCOEFF
-! copied from ../solver/n_ebfem_bxyz.f90 on 2017.05.14
-! copied from ../FEM_node/n_bzfem.f90
-! adjusted to edge-FEM code
 subroutine PREPOBSCOEFF(g_param,h_mesh,l_line,coeffobs)
-use mesh_type
-use line_type
-use param
-use matrix
-use fem_edge_util
-implicit none
-type(mesh),           intent(in)  :: h_mesh
-type(line_info),      intent(in)  :: l_line
-type(param_forward),  intent(in)  :: g_param
-type(real_crs_matrix),intent(out) :: coeffobs(2,3)     ! (1,(1,2,3)) for edge (x,y,z)
-real(8) :: x3(3),a4(4),r6(6),len(6),w(3,6),elm_xyz(3,4),v
-real(8) :: coeff(3,6),coeff_rot(3,6)
-real(8) :: wfe(3,6) ! face basis function * rotation matrix
-integer(4) :: iele,i,ii,j,k,l,jj,n6(6),ierr
+ ! copied from ../solver/n_ebfem_bxyz.f90 on 2017.05.14
+ ! copied from ../FEM_node/n_bzfem.f90
+ ! adjusted to edge-FEM code
+ use mesh_type
+ use line_type
+ use param
+ use matrix
+ use fem_edge_util
+ implicit none
+ type(mesh),           intent(in)  :: h_mesh
+ type(line_info),      intent(in)  :: l_line
+ type(param_forward),  intent(in)  :: g_param
+ type(real_crs_matrix),intent(out) :: coeffobs(2,3)     ! (1,(1,2,3)) for edge (x,y,z)
+ real(8) :: x3(3),a4(4),r6(6),len(6),w(3,6),elm_xyz(3,4),v
+ real(8) :: coeff(3,6),coeff_rot(3,6)
+ real(8) :: wfe(3,6) ! face basis function * rotation matrix
+ integer(4) :: iele,i,ii,j,k,l,jj,n6(6),ierr
 
-!#[1]# allocate coeffobs
-do i=1,2 ; do j=1,3
- coeffobs(i,j)%nrow=g_param%nobs
- coeffobs(i,j)%ncolm=l_line%nline ! added on 2017.05.15
- coeffobs(i,j)%ntot=g_param%nobs * 6 ! for lines of tetrahedral mesh
- allocate(coeffobs(i,j)%stack(0:coeffobs(i,j)%nrow))
- allocate( coeffobs(i,j)%item(  coeffobs(i,j)%ntot))
- allocate(  coeffobs(i,j)%val(  coeffobs(i,j)%ntot))
- coeffobs(i,j)%stack(0)=0
-end do ; end do
+ !#[1]# allocate coeffobs
+ do i=1,2 ; do j=1,3
+  coeffobs(i,j)%nrow=g_param%nobs
+  coeffobs(i,j)%ncolm=l_line%nline ! added on 2017.05.15
+  coeffobs(i,j)%ntot=g_param%nobs * 6 ! for lines of tetrahedral mesh
+  allocate(coeffobs(i,j)%stack(0:coeffobs(i,j)%nrow))
+  allocate( coeffobs(i,j)%item(  coeffobs(i,j)%ntot))
+  allocate(  coeffobs(i,j)%val(  coeffobs(i,j)%ntot))
+  coeffobs(i,j)%stack(0)=0
+ end do ; end do
 
-!#[2]# find element and set values to coeffobs
-ii=0
-do i=1,g_param%nobs
- if (g_param%lonlatflag .eq. 2 ) then ! xyobs is already set
-  x3(1:3)=(/g_param%xyzobs(1,i),g_param%xyzobs(2,i),g_param%xyzobs(3,i)/) ! [km]
-  call FINDELEMENT0(x3,h_mesh,iele,a4) ! see m_mesh_type.f90
-!  write(*,*) "x3(1:3,i)=",x3(1:3)
-!  write(*,*) "ieleobs(i)=",iele
-!  write(*,*) "coeff(i,1:4)=",coeff(1:4)
-  do j=1,2
-   do k=1,3
-   coeffobs(j,k)%stack(i)=coeffobs(j,k)%stack(i-1) + 6
-   end do
-  end do
-  do j=1,4
-    elm_xyz(1:3,j)=h_mesh%xyz(1:3,h_mesh%n4(iele,j))
-  end do
-  CALL EDGEBASISFUN(elm_xyz,x3,w  ,len,v) !v[km]^3,w[1/km],len[km],see m_fem_edge_util.f90
-  CALL FACEBASISFUN(elm_xyz,x3,wfe,v) !v[km]^3,w[1/km],len[km],see m_fem_edge_util.f90
-  do j=1,6
-   ! coeff is values for line-integrated value
-   coeff(1:3,j)     =   w(1:3,j) * isign(1,l_line%n6line(iele,j)) ! for icom-th component
-   coeff_rot(1:3,j) = wfe(1:3,j) * isign(1,l_line%n6line(iele,j)) ! for icom-th component
-   r6(j)=abs(l_line%n6line(iele,j))*1.d0
-  end do
-  n6(1:6)=(/1,2,3,4,5,6/)
-  call SORT_INDEX(6,n6,r6) !sort n4 index by r4 : see sort_index.f90
-  do j=1,6
-   jj=abs(l_line%n6line(iele,n6(j))) ! jj is global node id
-   ii=ii+1                  ! ii is entry id for coeffobs matrix
-   do l=1,3 ! l for component
-    coeffobs(1,l)%item(ii)=jj
-    coeffobs(2,l)%item(ii)=jj
-    coeffobs(1,l)%val(ii)=    coeff(l,n6(j)) ! for x component
-    coeffobs(2,l)%val(ii)=coeff_rot(l,n6(j)) ! for x component
-   end do
-  end do
- else
-  write(*,*) "GEGEGE! in PREPOBSCOEFF"
-  write(*,*) "g_param%lonlatflag",g_param%lonlatflag,"should be 2 here."
-  stop
- end if
-end do
+ !#[2]# find element and set values to coeffobs
+ ii=0
+ do i=1,g_param%nobs
+   if (g_param%lonlatflag .eq. 2 ) then ! xyobs is already set
+     x3(1:3)=(/g_param%xyzobs(1,i),g_param%xyzobs(2,i),g_param%xyzobs(3,i)/) ! [km]
+     !write(*,*) "x3(1:3,i)=",x3(1:3)
+     call FINDELEMENT0(x3,h_mesh,iele,a4) ! see m_mesh_type.f90
+     !  write(*,*) "ieleobs(i)=",iele
+     !  write(*,*) "coeff(i,1:4)=",coeff(1:4)
+     do j=1,2
+       do k=1,3
+         coeffobs(j,k)%stack(i)=coeffobs(j,k)%stack(i-1) + 6
+       end do
+     end do
+     do j=1,4
+       elm_xyz(1:3,j)=h_mesh%xyz(1:3,h_mesh%n4(iele,j))
+     end do
+     CALL EDGEBASISFUN(elm_xyz,x3,w  ,len,v) !v[km]^3,w[1/km],len[km],see m_fem_edge_util.f90
+     CALL FACEBASISFUN(elm_xyz,x3,wfe,v) !v[km]^3,w[1/km],len[km],see m_fem_edge_util.f90
+     do j=1,6
+       ! coeff is values for line-integrated value
+       coeff(1:3,j)     =   w(1:3,j) * isign(1,l_line%n6line(iele,j)) ! for icom-th component
+       coeff_rot(1:3,j) = wfe(1:3,j) * isign(1,l_line%n6line(iele,j)) ! for icom-th component
+       r6(j)=abs(l_line%n6line(iele,j))*1.d0
+     end do
+     n6(1:6)=(/1,2,3,4,5,6/)
+     call SORT_INDEX(6,n6,r6) !sort n4 index by r4 : see sort_index.f90
+     do j=1,6
+       jj=abs(l_line%n6line(iele,n6(j))) ! jj is global node id
+       ii=ii+1                  ! ii is entry id for coeffobs matrix
+       do l=1,3 ! l for component
+         coeffobs(1,l)%item(ii)=jj
+         coeffobs(2,l)%item(ii)=jj
+         coeffobs(1,l)%val(ii)=    coeff(l,n6(j)) ! for x component
+         coeffobs(2,l)%val(ii)=coeff_rot(l,n6(j)) ! for x component
+       end do
+     end do
+   else
+     write(*,*) "GEGEGE! in PREPOBSCOEFF"
+     write(*,*) "g_param%lonlatflag",g_param%lonlatflag,"should be 2 here."
+     stop
+   end if
+ end do
 
-!write(*,*) "### PREPOBSCOEFF END!! ###"   ! commented out on 2017.09.04
-return
-
-end
+ !write(*,*) "### PREPOBSCOEFF END!! ###"   ! commented out on 2017.09.04
+ return
+ end
 !####################################################### PREPOBSCOEFF
-! copied from ../solver/n_ebfem_bxyz.f90 on 2021.09.15
 subroutine PREPOBSCOEFF_MT(g_param,h_mesh,l_line,coeffobs,ip) ! 2022.01.05
+ ! copied from ../solver/n_ebfem_bxyz.f90 on 2021.09.15
   use mesh_type
   use line_type
   use param_mt ! 2021.12.15
@@ -2101,30 +2598,30 @@ subroutine PREPOBSCOEFF_MT(g_param,h_mesh,l_line,coeffobs,ip) ! 2022.01.05
   end
   
 !######################################## ALLOCATERESP
-! modified on 2017.05.18
 subroutine PREPRESPFILES(g_param,files,resp5,nfreq)
-use outresp
-use param
-implicit none
-integer(4),         intent(in) :: nfreq ! 2017.05.18
-type(param_forward),intent(in) :: g_param
-type(obsfiles),intent(inout)   :: files
-type(respdata),intent(inout)   :: resp5(5,nfreq)
-integer(4) :: nobs,i,j
+ ! modified on 2017.05.18
+ use outresp
+ use param
+ implicit none
+ integer(4),         intent(in) :: nfreq ! 2017.05.18
+ type(param_forward),intent(in) :: g_param
+ type(obsfiles),intent(inout)   :: files
+ type(respdata),intent(inout)   :: resp5(5,nfreq)
+ integer(4) :: nobs,i,j
 
-!#[1]## set
-nobs = g_param%nobs
+ !#[1]## set
+ nobs = g_param%nobs
 
-!#[2]## make files and allocate
-CALL MAKEOBSFILES(g_param,files)
-!CALL OPENOBSFILES(files)  !commented out on 2017.05.18
+ !#[2]## make files and allocate
+ CALL MAKEOBSFILES(g_param,files)
+ !CALL OPENOBSFILES(files)  !commented out on 2017.05.18
 
-return
-end
+ return
+ end
 !######################################## CALOBSRESP
-!# Coded on Nov. 21, 2015
-!# This calculates the output b fields and output results
 subroutine CALOBSRESP_3DMT(ft,nline,coeffobs,resp) ! fp, fs -> ft 2021.09.15
+ !# Coded on Nov. 21, 2015
+ !# This calculates the output b fields and output results
   use matrix
   use outresp
   implicit none
@@ -2147,255 +2644,271 @@ subroutine CALOBSRESP_3DMT(ft,nline,coeffobs,resp) ! fp, fs -> ft 2021.09.15
    resp%ftobsamp(i)  =amp  (ftobs(i)) ! amp of bz
    resp%ftobsphase(i)=phase(ftobs(i)) ! phase of bz
    resp%ftobs(i)     =ftobs(i)        ! 2021.09.15
-  ! write(6,*)resp%ftobsamp(i),"amp!!!!!!!!!"
-end do
-
-!write(6,*)resp%ftobsamp(i),"amp!!!!!!!!!"
+  end do
   
-  write(*,*) "### CALOBSRESP_3DMT END!! ###"
+ !  write(*,*) "### CALOBSRESP_3DMT END!! ###"
   return
   end
 !######################################## CALOBSRESP
-!# Coded on Nov. 21, 2015
-!# This calculates the output b fields and output results
 subroutine CALOBSRESP(fp,fs,doftot,coeffobs,resp)
-use matrix
-use outresp
-implicit none
-integer(4),           intent(in)    :: doftot
-complex(8),           intent(in)    :: fp(doftot)
-complex(8),           intent(in)    :: fs(doftot)
-type(real_crs_matrix),intent(in)    :: coeffobs ! see m_matrix.f90
-type(respdata),       intent(inout) :: resp   ! see m_outresp.f90
-complex(8),allocatable,dimension(:) :: ft
-complex(8),allocatable,dimension(:) :: fpobs,fsobs,ftobs
-real(8) :: amp,phase
-integer(4) :: i
-allocate(ft(doftot))
-allocate(fpobs(resp%nobs))
-allocate(fsobs(resp%nobs),ftobs(resp%nobs))
+ !# Coded on Nov. 21, 2015
+ !# This calculates the output b fields and output results
+ use matrix
+ use outresp
+ implicit none
+ integer(4),           intent(in)    :: doftot
+ complex(8),           intent(in)    :: fp(doftot)
+ complex(8),           intent(in)    :: fs(doftot)
+ type(real_crs_matrix),intent(in)    :: coeffobs ! see m_matrix.f90
+ type(respdata),       intent(inout) :: resp   ! see m_outresp.f90
+ complex(8),allocatable,dimension(:) :: ft
+ complex(8),allocatable,dimension(:) :: fpobs,fsobs,ftobs
+ real(8) :: amp,phase
+ integer(4) :: i
+ allocate(ft(doftot))
+ allocate(fpobs(resp%nobs))
+ allocate(fsobs(resp%nobs),ftobs(resp%nobs))
 
-!#[1]## generate btotal
-ft(1:doftot)=fs(1:doftot)+fp(1:doftot) ! [nT*km] or [mV/km * km]
-!write(*,*) "bt is created!"
+ !#[1]## generate btotal
+ ft(1:doftot)=fs(1:doftot)+fp(1:doftot) ! [nT*km] or [mV/km * km]
+ !write(*,*) "bt is created!"
 
-!#[2]## calculate bp,bs,bt at observation points
-CALL mul_matcrs_cv(coeffobs,fp(1:doftot),doftot,fpobs) ! see m_matrix.f90
-CALL mul_matcrs_cv(coeffobs,fs(1:doftot),doftot,fsobs) ! see m_matrix.f90
-CALL mul_matcrs_cv(coeffobs,ft(1:doftot),doftot,ftobs) ! see m_matrix.f90
-!write(*,*) "bpobs,bsobs,btobs is created!"
+ !#[2]## calculate bp,bs,bt at observation points
+ CALL mul_matcrs_cv(coeffobs,fp(1:doftot),doftot,fpobs) ! see m_matrix.f90
+ CALL mul_matcrs_cv(coeffobs,fs(1:doftot),doftot,fsobs) ! see m_matrix.f90
+ CALL mul_matcrs_cv(coeffobs,ft(1:doftot),doftot,ftobs) ! see m_matrix.f90
+ !write(*,*) "bpobs,bsobs,btobs is created!"
 
-!#[3]## cal b3 comp and output
-do i=1,resp%nobs
- resp%fpobsamp(i)  =amp  (fpobs(i)) ! amplitude of bz primary
- resp%fpobsphase(i)=phase(fpobs(i)) ! phase of primary fields
- resp%ftobsamp(i)  =amp  (ftobs(i)) ! amp of bz
- resp%ftobsphase(i)=phase(ftobs(i)) ! phase of bz
- resp%fsobsamp(i)  =amp  (fsobs(i)) ! amp of bz
- resp%fsobsphase(i)=phase(fsobs(i)) ! phase of bz
-end do
+ !#[3]## cal b3 comp and output
+ do i=1,resp%nobs
+   resp%fpobsamp(i)  =amp  (fpobs(i)) ! amplitude of bz primary
+   resp%fpobsphase(i)=phase(fpobs(i)) ! phase of primary fields
+   resp%ftobsamp(i)  =amp  (ftobs(i)) ! amp of bz
+   resp%ftobsphase(i)=phase(ftobs(i)) ! phase of bz
+   resp%fsobsamp(i)  =amp  (fsobs(i)) ! amp of bz
+   resp%fsobsphase(i)=phase(fsobs(i)) ! phase of bz
+ end do
 
-!write(*,*) "### CALOBSRESP END!! ###"
-return
-end
+ !write(*,*) "### CALOBSRESP END!! ###"
+ return
+ end
 !######################################## function phase
 function phase(c) ! [deg]
-implicit none
-complex(8),intent(in) :: c
-real(8) :: phase
-real(8),parameter :: pi=4.d0*datan(1.d0), r2d=180.d0/pi
+ implicit none
+ complex(8),intent(in) :: c
+ real(8) :: phase
+ real(8),parameter :: pi=4.d0*datan(1.d0), r2d=180.d0/pi
  phase=datan2(dimag(c),dreal(c))*r2d
  return
-end
+ end
 !######################################## function amp
 function amp(c)
-implicit none
-complex(8),intent(in) :: c
-real(8) :: amp
+ implicit none
+ complex(8),intent(in) :: c
+ real(8) :: amp
  amp=dsqrt(dreal(c)**2.d0 + dimag(c)**2.d0)
  return
-end
+ end
 
 !################################################################# PREPZSRCOBS
-
-! modified on 2017.07.11 to include multi source
-!# Coded on 2017.02.21
 subroutine PREPZSRCOBS(h_mesh,g_param,s_param)
-use param
-use mesh_type
-use triangle
-implicit none
-type(mesh),         intent(inout)     :: h_mesh  ! deallocated at the end 2017.05.15
-type(param_forward),intent(inout)     :: g_param
-type(param_source), intent(inout)     :: s_param
-type(grid_list_type)                  :: glist
-integer(4)                            :: nobs,nx,ny
-real(8),   allocatable,dimension(:,:) :: xyzobs,xyz
-integer(4),allocatable,dimension(:,:) :: n3k
-real(8),   allocatable,dimension(:)   :: znew
-real(8)    :: a3(3)
-integer(4) :: iele,n1,n2,n3,j,k,ntri
-integer(4) :: nsr                                ! 2017.07.14
-real(8)    :: xyzminmax(6),zorigin
-real(8),   allocatable,dimension(:,:) :: xs1,xs2 ! 2017.07.14
+ ! modified on 2017.07.11 to include multi source
+ !# Coded on 2017.02.21
+ use param
+ use mesh_type
+ use triangle
+ implicit none
+ type(mesh),         intent(inout)     :: h_mesh  ! deallocated at the end 2017.05.15
+ type(param_forward),intent(inout)     :: g_param
+ type(param_source), intent(inout)     :: s_param
+ type(grid_list_type)                  :: glist
+ integer(4)                            :: nobs,nx,ny
+ real(8),   allocatable,dimension(:,:) :: xyzobs,xyz
+ integer(4),allocatable,dimension(:,:) :: n3k
+ real(8),   allocatable,dimension(:)   :: znew
+ real(8)    :: a3(3)
+ integer(4) :: iele,n1,n2,n3,j,k,ntri
+ integer(4) :: nsr                                ! 2017.07.14
+ real(8)    :: xyzminmax(6),zorigin
+ real(8),   allocatable,dimension(:,:) :: xs1,xs2 ! 2017.07.14
 
-!#[0]## cal xyzminmax of h_mesh
+ !#[0]## cal xyzminmax of h_mesh
   CALL GENXYZMINMAX(h_mesh,g_param)
 
-!#[1]## set
-nsr       = s_param%nsource     ! 2017.07.14
-allocate(xs1(3,nsr),xs2(3,nsr)) ! 2017.07.14
-allocate(xyz(3,h_mesh%node),n3k(h_mesh%ntri,3))
-allocate(xyzobs(3,g_param%nobs))
-allocate(znew(g_param%nobs))
-nobs      = g_param%nobs
-xyz       = h_mesh%xyz    ! triangle mesh
-n3k       = h_mesh%n3
-ntri      = h_mesh%ntri
-xyzobs    = g_param%xyzobs
-xs1       = s_param%xs1
-xs2       = s_param%xs2
-xyzminmax = g_param%xyzminmax
+ !#[1]## set
+ nsr       = s_param%nsource     ! 2017.07.14
+ allocate(xs1(3,nsr),xs2(3,nsr)) ! 2017.07.14
+ allocate(xyz(3,h_mesh%node),n3k(h_mesh%ntri,3))
+ allocate(xyzobs(3,g_param%nobs))
+ allocate(znew(g_param%nobs))
+ nobs      = g_param%nobs
+ xyz       = h_mesh%xyz    ! triangle mesh
+ n3k       = h_mesh%n3
+ ntri      = h_mesh%ntri
+ xyzobs    = g_param%xyzobs
+ xs1       = s_param%xs1
+ xs2       = s_param%xs2
+ xyzminmax = g_param%xyzminmax
 
 
-!#[2]## cal z for nobsr
-nx=300;ny=300
-CALL allocate_2Dgrid_list(nx,ny,ntri,glist)   ! see m_mesh_type.f90
-CALL gen2Dgridforlist(xyzminmax,glist) ! see m_mesh_type.f90
-CALL classifytri2grd(h_mesh,glist)   ! classify ele to glist,see
+ !#[2]## cal z for nobsr
+ nx=300;ny=300
+ CALL allocate_2Dgrid_list(nx,ny,ntri,glist)   ! see m_mesh_type.f90
+ CALL gen2Dgridforlist(xyzminmax,glist) ! see m_mesh_type.f90
+ CALL classifytri2grd(h_mesh,glist)   ! classify ele to glist,see
 
 
-!#[3] search for the triangle including (x1,y1)
-do j=1,nobs
+ !#[3] search for the triangle including (x1,y1)
+ do j=1,nobs
     call findtriwithgrid(h_mesh,glist,xyzobs(1:2,j),iele,a3)
     n1 = n3k(iele,1); n2 = n3k(iele,2) ; n3 = n3k(iele,3)
     znew(j) = a3(1)*xyz(3,n1)+a3(2)*xyz(3,n2)+a3(3)*xyz(3,n3) + xyzobs(3,j)
-!
     write(*,10) " Obs # ",j, g_param%obsname(j)    ! 2020.09.29
     write(*,11) " x,y =",xyzobs(1,j)," , ",xyzobs(2,j)," [km]" ! 2022.10.14
     write(*,11) "   z =",xyzobs(3,j)," ->",znew(j),    " [km]" ! 2020.09.17
-end do
+ end do
 
-!#[3-2]## source z
- do k=1,nsr                                                               ! 2017.07.14
-!#  start point
-    call findtriwithgrid(h_mesh,glist,xs1(1:2,k),iele,a3)                 ! 2017.07.14
-    n1 = n3k(iele,1); n2 = n3k(iele,2) ; n3 = n3k(iele,3)
-    xs1(3,k) = a3(1)*xyz(3,n1)+a3(2)*xyz(3,n2)+a3(3)*xyz(3,n3) + xs1(3,k) ! 2017.07.14
+ !#[3-2]## source z
+   do k=1,nsr !2017.07.14
+     !#  start point
+     call findtriwithgrid(h_mesh,glist,xs1(1:2,k),iele,a3)     ! 2017.07.14
+     n1 = n3k(iele,1); n2 = n3k(iele,2) ; n3 = n3k(iele,3)
+     xs1(3,k) = a3(1)*xyz(3,n1)+a3(2)*xyz(3,n2)+a3(3)*xyz(3,n3) + xs1(3,k) ! 2017.07.14
+    
+     write(*,9 ) " Src # = ",k    ! 2020.09.17
+     write(*,*)   "Start point:"  ! 2020.09.17
+     write(*,11) " x,y =",xs1(1,k),        " , ",xs1(2,k)," [km]"   ! 2020.09.17
+     write(*,11) "   z =",s_param%xs1(3,k)," ->",xs1(3,k)," [km]"   ! 2020.09.17
+
+     !#  end point
+     call findtriwithgrid(h_mesh,glist,xs2(1:2,k),iele,a3)                 ! 2017.07.14
+     n1 = n3k(iele,1); n2 = n3k(iele,2) ; n3 = n3k(iele,3)
+     xs2(3,k) = a3(1)*xyz(3,n1)+a3(2)*xyz(3,n2)+a3(3)*xyz(3,n3) + xs2(3,k)
     !
-    write(*,9 ) " Src # = ",k    ! 2020.09.17
-    write(*,*)   "Start point:"  ! 2020.09.17
-    write(*,11) " x,y =",xs1(1,k),        " , ",xs1(2,k)," [km]"   ! 2020.09.17
-    write(*,11) "   z =",s_param%xs1(3,k)," ->",xs1(3,k)," [km]"   ! 2020.09.17
+     write(*,*)   "End point:"    ! 2020.09.17
+     write(*,11) " x,y =",xs2(1,k),        " , ",xs2(2,k)," [km]" ! 2020.09.17
+     write(*,11) "   z =",s_param%xs2(3,k)," ->",xs2(3,k)," [km]" ! 2020.09.17
+   end do
 
-!#  end point
-    call findtriwithgrid(h_mesh,glist,xs2(1:2,k),iele,a3)                 ! 2017.07.14
-    n1 = n3k(iele,1); n2 = n3k(iele,2) ; n3 = n3k(iele,3)
-    xs2(3,k) = a3(1)*xyz(3,n1)+a3(2)*xyz(3,n2)+a3(3)*xyz(3,n3) + xs2(3,k) ! 2017.07.14
-    !
-    write(*,*)   "End point:"    ! 2020.09.17
-    write(*,11) " x,y =",xs2(1,k),        " , ",xs2(2,k)," [km]" ! 2020.09.17
-    write(*,11) "   z =",s_param%xs2(3,k)," ->",xs2(3,k)," [km]" ! 2020.09.17
-end do
-9  format(a,i3)
-10 format(a,i3,a)
-11 format(a,f8.3,a,f8.3,a) ! 2020.09.17
+ 9  format(a,i3)
+ 10 format(a,i3,a)
+ 11 format(a,f8.3,a,f8.3,a) ! 2020.09.17
 
-!#[4]## set znew to xyz_r
+ !#[4]## set znew to xyz_r
     g_param%xyzobs(3,1:nobs) = znew(1:nobs)
     s_param%xs1(3,:) = xs1(3,:)                 ! 2017.07.14
     s_param%xs2(3,:) = xs2(3,:)                 ! 2017.07.14
 
-!#[5]## kill mesh for memory 2017.05.15
-  !  call killmesh(h_mesh) ! see m_mesh_type.f90
+ !#[5]## kill mesh for memory 2017.05.15
+  !  call killmesh(h_mesh) ! see m_mesh_type.f90 commented out 2024.10.07
 
-write(*,*) "### PREPZSRCOBS  END!! ###"
-return
-end subroutine PREPZSRCOBS
+ write(*,*) "### PREPZSRCOBS  END!! ###"
+ return
+ end
+ !################################################################# PREPZOBSMT
+subroutine PREPZOBSMT(h_mesh,g_param_mt)
+ ! modified on 2017.07.11 to include multi source
+ !# Coded on 2017.02.21
+ use param_mt
+ use mesh_type
+ use triangle
+ implicit none
+ type(mesh),         intent(inout)     :: h_mesh  ! deallocated at the end 2017.05.15
+ type(param_forward_mt),intent(inout)     :: g_param_mt
+ type(grid_list_type)                  :: glist
+ integer(4)                            :: nobs,nx,ny
+ real(8),   allocatable,dimension(:,:) :: xyzobs,xyz
+ integer(4),allocatable,dimension(:,:) :: n3k
+ real(8),   allocatable,dimension(:)   :: znew
+ real(8)    :: a3(3)
+ integer(4) :: iele,n1,n2,n3,j,k,ntri
+ integer(4) :: nsr                                ! 2017.07.14
+ real(8)    :: xyzminmax(6),zorigin
+ real(8),   allocatable,dimension(:,:) :: xs1,xs2 ! 2017.07.14
 
-!################################################################# PREPZSRCOBS
+ !#[0]## cal xyzminmax of h_mesh
+  CALL GENXYZMINMAX_MT(h_mesh,g_param_mt)
+
+ !#[1]## set
+ allocate(xyz(3,h_mesh%node),n3k(h_mesh%ntri,3))
+ allocate(xyzobs(3,g_param_mt%nobs))
+ allocate(znew(g_param_mt%nobs))
+ nobs      = g_param_mt%nobs
+ xyz       = h_mesh%xyz    ! triangle mesh
+ n3k       = h_mesh%n3
+ ntri      = h_mesh%ntri
+ xyzobs    = g_param_mt%xyzobs
+ xyzminmax = g_param_mt%xyzminmax
 
 
-!##################################################################
+ !#[2]## cal z for nobsr
+ nx=300;ny=300
+ CALL allocate_2Dgrid_list(nx,ny,ntri,glist)   ! see m_mesh_type.f90
+ CALL gen2Dgridforlist(xyzminmax,glist) ! see m_mesh_type.f90
+ CALL classifytri2grd(h_mesh,glist)   ! classify ele to glist,see
 
-! modified on 2017.07.11 to include multi source
-!# Coded on 2017.02.21
-subroutine PREPZSRCOBS_MT(h_mesh,g_param)
-use param_mt
-use mesh_type
-use triangle
-implicit none
-type(mesh),         intent(inout)     :: h_mesh  ! deallocated at the end 2017.05.15
-type(param_forward_mt),intent(inout)  :: g_param
-type(grid_list_type)                  :: glist
-integer(4)                            :: nobs,nx,ny
-real(8),   allocatable,dimension(:,:) :: xyzobs,xyz
-integer(4),allocatable,dimension(:,:) :: n3k
-real(8),   allocatable,dimension(:)   :: znew
-real(8)    :: a3(3)
-integer(4) :: iele,n1,n2,n3,j,k,ntri
-integer(4) :: nsr                                ! 2017.07.14
-real(8)    :: xyzminmax(6),zorigin
-real(8),   allocatable,dimension(:,:) :: xs1,xs2 ! 2017.07.14
 
-!write(6,*)"done100"
-
-!#[0]## cal xyzminmax of h_mesh
-!CALL GENXYZMINMAX_mt(h_mesh,g_param)
-
-g_param%xyzminmax=h_mesh%xyzminmax    
-
-write(6,*)"done100"
-
-!#[1]## set
-allocate(xyz(3,h_mesh%node),n3k(h_mesh%ntri,3))
-allocate(xyzobs(3,g_param%nobs))
-allocate(znew(g_param%nobs))
-nobs      = g_param%nobs
-xyz       = h_mesh%xyz    ! triangle mesh
-n3k       = h_mesh%n3
-ntri      = h_mesh%ntri
-xyzobs    = g_param%xyzobs
-xyzminmax = g_param%xyzminmax
-
-write(6,*)"done101"
-
-!#[2]## cal z for nobsr
-nx=300;ny=300
-CALL allocate_2Dgrid_list(nx,ny,ntri,glist)   ! see m_mesh_type.f90
-write(6,*)"done101.1"
-CALL gen2Dgridforlist(xyzminmax,glist) ! see m_mesh_type.f90
-write(6,*)"done101.2"
-CALL classifytri2grd(h_mesh,glist)   ! classify ele to glist,see
-write(6,*)"done102"
-
-!#[3] search for the triangle including (x1,y1)
-do j=1,nobs
+ !#[3] search for the triangle including (x1,y1)
+ do j=1,nobs
     call findtriwithgrid(h_mesh,glist,xyzobs(1:2,j),iele,a3)
     n1 = n3k(iele,1); n2 = n3k(iele,2) ; n3 = n3k(iele,3)
     znew(j) = a3(1)*xyz(3,n1)+a3(2)*xyz(3,n2)+a3(3)*xyz(3,n3) + xyzobs(3,j)
-!
-    write(*,10) " Obs # ",j, g_param%obsname(j)    ! 2020.09.29
+    write(*,10) " Obs # ",j, g_param_mt%obsname(j)    ! 2020.09.29
     write(*,11) " x,y =",xyzobs(1,j)," , ",xyzobs(2,j)," [km]" ! 2022.10.14
     write(*,11) "   z =",xyzobs(3,j)," ->",znew(j),    " [km]" ! 2020.09.17
+ end do
+
+ 9  format(a,i3)
+ 10 format(a,i3,a)
+ 11 format(a,f8.3,a,f8.3,a) ! 2020.09.17
+
+ !#[4]## set znew to xyz_r
+    g_param_mt%xyzobs(3,1:nobs) = znew(1:nobs)
+
+ !#[5]## kill mesh for memory 2017.05.15
+  !  call killmesh(h_mesh) ! see m_mesh_type.f90
+
+ write(*,*) "### PREPZOBSMT  END!! ###"
+ return
+ end
+ !###################################################################
+! modified for spherical on 2016.11.20
+! iflag = 0 for xyz
+! iflag = 1 for xyzspherical
+subroutine GENXYZMINMAX_MT(em_mesh,g_param_mt)
+use param_mt ! 2016.11.20
+use mesh_type
+implicit none
+type(mesh),            intent(inout) :: em_mesh ! 2021.10.13
+type(param_forward_mt),intent(inout) :: g_param_mt ! 2021.12.15
+real(8) :: xmin,xmax,ymin,ymax,zmin,zmax
+real(8) :: xyz(3,em_mesh%node),xyzminmax(6)
+integer(4) :: i
+xyz = em_mesh%xyz ! normal
+xmin=xyz(1,1) ; xmax=xyz(1,1)
+ymin=xyz(2,1) ; ymax=xyz(2,1)
+zmin=xyz(3,1) ; zmax=xyz(3,1)
+
+do i=1,em_mesh%node
+ xmin=min(xmin,xyz(1,i))
+ xmax=max(xmax,xyz(1,i))
+ ymin=min(ymin,xyz(2,i))
+ ymax=max(ymax,xyz(2,i))
+ zmin=min(zmin,xyz(3,i))
+ zmax=max(zmax,xyz(3,i))
 end do
 
+write(*,*) "xmin,xmax",xmin,xmax ! 2021.10.13
+write(*,*) "ymin,ymax",ymin,ymax ! 2021.10.13
+write(*,*) "zmin,zmax",zmin,zmax ! 2021.10.13
 
-9  format(a,i3)
-10 format(a,i3,a)
-11 format(a,f8.3,a,f8.3,a) ! 2020.09.17
+xyzminmax(1:6)=(/xmin,xmax,ymin,ymax,zmin,zmax/)
 
-!#[4]## set znew to xyz_r
-    g_param%xyzobs(3,1:nobs) = znew(1:nobs)
- 
-!#[5]## kill mesh for memory 2017.05.15
-    call killmesh(h_mesh) ! see m_mesh_type.f90
+!# set output
+g_param_mt%xyzminmax = xyzminmax ! 2021.12.15
+em_mesh%xyzminmax = xyzminmax    ! 2021.10.13
 
-write(*,*) "### PREPZSRCOBS_MT  END!! ###"
+write(*,*) "### GENXYZMINMAX END!! ###"
 return
-end subroutine PREPZSRCOBS_MT
-
-!###################################################################
-
-
+end
 
