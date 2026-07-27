@@ -425,7 +425,7 @@ type(real_crs_matrix)                 :: RTR        ! This is not used 2017.12.2
 integer(4),parameter                  :: itype_roughness = 3 ! MSG 2017.12.25
 !# internal variables
 type(PARDISO_PARAM)                   :: B        ! 2017.12.18
-real(8)                               :: epsilon
+real(8)                               :: ee=1.d-2 ! small value for diagonal 2025.07.29
 integer(4)                            :: i,j
 integer(4)                            :: nmodelactive ! 2018.06.25
 type(watch) :: t_watch  ! 2017.12.22
@@ -439,11 +439,11 @@ write(*,*) "### GENRI_MSG START!! ###" !2017.12.28
 
 !#[1]## add small values to diagonals of R (Usui et al., 2017)
  RE = R  ! 2017.12.25
- epsilon =1.d-2 ! small value
  do i=1,RE%nrow
   do j=RE%stack(i-1)+1,RE%stack(i)
    if ( RE%item(j) .eq. i ) then ! only diagonal
-   RE%val(j) = RE%val(j) + epsilon                 ! 2017.08.31
+   RE%val(j) = RE%val(j) + ee   ! epsilon -> ee 2025.07.29
+
    end if
   end do
  end do
@@ -482,7 +482,7 @@ type(real_crs_matrix)                :: R       ! 2017.12.25
 type(real_crs_matrix)                :: RTR     ! 2017.12.25
 type(real_crs_matrix)                :: crsin,crsout ! 2017.12.25
 integer(4)                           :: nmodel,i,j,j1,j2,ntot
-real(8)                              :: epsilon
+real(8)                              :: ee=1.d-2 ! 2025.07.29
 real(8),allocatable,dimension(:)     :: volmodel    ! 2017.06.14
 type(real_crs_matrix)                :: model2ele ! 2017.06.14
 real(8)                              :: v,xx(3,6), elm_xyz(3,4) ! 2017.06.14
@@ -522,11 +522,10 @@ call watchstart(t_watch) ! 2017.12.22
  end if
 
 !#[3]## add small values to diagonals (Usui et al., 2017)
- epsilon =1.d-2 ! small value
  do i=1,nmodel
   do j=stack(i-1)+1,stack(i)
   if ( item(j) .eq. i ) then ! only diagonal
-   RTR%val(j) = RTR%val(j) + epsilon                 ! 2017.08.31
+   RTR%val(j) = RTR%val(j) + ee                 ! epsilon -> ee 2025.07.29
    !  write(*,*) "i",i,"RTR%val(j)=",RTR%val(j),"volmodel(i)",volmodel(i)
    !  RTR%val(j) = RTR%val(j) + 10.*(volmodel(i)**3.d0) ! commented out 2017.08.31
   end if
@@ -535,9 +534,12 @@ call watchstart(t_watch) ! 2017.12.22
 
 !#[4]## calculate BMI
 
-!write(*,*) "nmodel check =",nmodel
+ write(*,*) "nmodel check =",nmodel
+ write(*,*) "size(RTR%item)",size(RTR%item)
+ write(*,*) "size(RTR%stack)",size(RTR%stack)
  call PARDISOphase1(RTR,B)   ! see m_solveCM_ap.f90
  call PARDISOphase2(B)       ! see m_solveCM_ap.f90
+ write(*,*) "nmodel 3",nmodel
  call PARDISOphase3(B,nmodel,BMI) ! see m_solveCM_ap.f90 2017.12.25
  call PARDISOphase4(B)       ! see m_solveCM_ap.f90
 
