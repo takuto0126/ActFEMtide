@@ -2,8 +2,11 @@
 !# Copied from ../src_inv/forward_inv.f90
 !# Coded on March 4, 2016
 !# copied originally from ../solver/forward_bxyz.f90
-subroutine forward_joint(ACT,MT,A,h_mesh,l_line,g_surface,nline,nsr,bs,bs_mt,omega,sparam,g_param,&
-                   &     g_param_joint,g_cond,PT,PT_mt,ut,ut_mt,ip,np) ! 2022.10.14
+module forward_joint_inv ! 2026.03.03
+contains                  ! 2026.03.03
+subroutine forward_joint(ACT,MT,TIP,A,h_mesh,l_line,g_surface,nline,nsr,&
+                   &   bs,bs_mt,omega,sparam,g_param,&
+                   &   g_param_joint,g_cond,PT,PT_mt,ut,ut_mt,ip,np) ! 2026.03.03
 use mesh_type
 use iccg_var_takuto
 use line_type
@@ -13,10 +16,9 @@ use constants      ! added on 2016.10.17
 use matrix         ! added on 2017.05.15
 use caltime        ! 2017.12.22
 use surface_type   ! 2021.12.30
-use readFvxyz
 implicit none
 !--------------- input and output variants ------------------
-logical,                 intent(in)     :: ACT,MT        ! 2022.10.20
+logical,                 intent(in)     :: ACT,MT,TIP    ! TIP added 2026.03.01
 integer(4),              intent(in)     :: ip,np         ! 2020.09.18
 integer(4),              intent(in)     :: nsr           ! 2017.07.13
 integer(4),              intent(in)     :: nline
@@ -29,12 +31,12 @@ type(param_joint),       intent(in)     :: g_param_joint ! 2021.12.25
 type(param_cond)  ,      intent(in)     :: g_cond
 type(surface),           intent(in)     :: g_surface(6)  ! 2021.12.29
 type(real_crs_matrix),   intent(in)     :: PT(5)         ! [nline,nobs]*5    Bx,By,Bz,Ex,Ey
-type(real_crs_matrix),   intent(in)     :: PT_mt(4)      ! [nline,nobs_mt]*5 Bx,By,Bz,Ex,Ey
+type(real_crs_matrix),   intent(in)     :: PT_mt(5)      ! [nline,nobs_mt]*5 Bx,By,Ex,Ey,Bz 2026.03.02
 type(global_matrix),     intent(inout)  :: A             ! see m_iccg_var_takuto.f90
 complex(8),              intent(out)    :: bs(   nline,nsr)! 2017.07.13   solution vector for ACTIVE
 complex(8),              intent(out)    :: bs_mt(nline,2  )! 2020.12.29  solution vector for MT
 type(complex_crs_matrix),intent(out)    :: ut(5)         ! [nline,nobs]*5    2018.10.05
-type(complex_crs_matrix),intent(out)    :: ut_mt(4)      ! [nline,nobs_mt]*5 2021.12.29
+type(complex_crs_matrix),intent(out)    :: ut_mt(5)      ! [nline,nobs_mt]*5 2021.12.29
 !--------------- internal variables
 integer(4),              dimension(5)   :: iflag_comp    ! 2018.10.05
 type(complex_crs_matrix)                :: null  ! added on 2017.05.16
@@ -75,7 +77,7 @@ CALL COPY_UL_ICCG12(A,ip) ! 2021.10.04
 !#[5-1]## Dirichlet boundary at calculation boundaries
 if (ACT) CALL GENBCCSEM(zmin,zmax,xout,yout,l_line,h_mesh,Avalue_bc,line_bc,IB) ! set line_bc, Avalue_bc
 if (MT ) CALL GENBCMT(g_surface,omega,nline,Avalue_bc_mt,line_bc_mt) ! ok 2021.12.29
-if ( ip .eq. 0 .and. MT  ) then
+if ( ip .eq. 0 .and. MT  .and. .false. ) then ! for debug 2026.03.11
   open(1,file="bc.dat")
   do i=1,nline
    if (line_bc_mt(i,1) ) write(1,'(i6,4g15.7)'),i,Avalue_bc_mt(i,1:2)
@@ -90,12 +92,15 @@ if (ACT) CALL SET_BC_ACTIVE(A, nline, nsr, rf, Avalue_bc, line_bc)              
 !CALL SET_BC_3DJoint(A,nline,nsr,rf,rf_mt,Avalue_bc,Avalue_bc_mt,line_bc,ip)!see below 2021.12.29
 
 !#[7]## Solve
-call solvePARDISOjointinv(ACT,MT,nline,nsr,A,rf,rf_mt,bs,bs_mt,PT,PT_mt,ut,ut_mt,iflag_comp,ip,np) ! 2022.10.14 nec is added
+call solvePARDISOjointinv(ACT,MT,TIP,nline,nsr,A,rf,rf_mt,bs,bs_mt,PT,PT_mt,ut,ut_mt,iflag_comp,ip,np) ! 2022.10.14 nec is added
 
 call watchstop(t_watch) ! 2017.12.22
-write(*,10) " ### forward_jointinv  END !! ###  ip =",ip," /",np," Time =",t_watch%time," [min]" ! 2020.09.18
+!write(*,10) " ### FORWARD_JOINTINV END !! ###  ip =",ip," /",np," Time =",t_watch%time," [min]" ! 
+!2020.09.18
+write(*,11)  " ### FORWARD_JOINTINV END !! ###  ip =",ip," Time =",t_watch%time," [min]" ! 2020.09.18
 return
 10 format(a,i2,a,i2,a,f9.4,a)
+11 format(a,i2,a,f9.4,a)
 end subroutine forward_joint              ! 2021.12.25
 !########################################
 ! modified on 2017.07.13 for multiple sources
@@ -381,11 +386,10 @@ use  param
 use  param_jointinv  !2021.12 25 2017.08.31
 use  constants,      only:pi,dmu,epsilon  ! see m_constants.f90, 2018.06.25
 use  m_param_ana,    only:cond,istructure ! see m_param_ana.f90
-use readFvxyz
 implicit none
 type(mesh),             intent(in)    :: h_mesh
 type(line_info),        intent(in)    :: l_line
-type(param_forward),    intent(inout)    :: g_param
+type(param_forward),    intent(in)    :: g_param
 type(param_joint),intent(in)    :: g_param_joint ! 2017.08.31
 type(param_source),     intent(in)    :: sparam
 type(param_cond),       intent(in)    :: g_cond
@@ -409,40 +413,6 @@ complex(8)                            :: b3(3,4),bl(6)
 logical                               :: itrue
 real(8),allocatable,dimension(:,:)    :: x3s,x3e ! 2017.07.13
 real(8)            ,dimension(3)      :: PQ,unitPQ,x3p1,x3p2,localPQ,x1,x2,x3
-
-type(mesh)   ::h_ocean
-complex(8)::inum
-character(50)::oceanmeshfile
-complex(8)::S2(6),vF(3,4)
-complex(8),allocatable,dimension(:,:) ::vxyz
-real(8),allocatable,dimension(:,:) ::fxyz
-integer(8)::no(4),elementnode
-real(8)::F(3)
-!open(15,file="checkbvec")
-!oceanmeshfile="../mesh_tide/ocean.msh"
-!g_param%ocean_meshfile="../mesh_tide/slabmodel1/ocean.msh"
-!g_param%fxyz_file="../src2/src_tide/slabmodel1/fxyz_mesh"
-!g_param%vxyz_file="../src2/src_tide/slabmodel1/vxyz_mesh"
-
-g_param%ocean_meshfile="../mesh_tide/model6/ocean.msh"
-g_param%fxyz_file="../src2/src_tide/model6/fxyz_mesh"
-g_param%vxyz_file="../src2/src_tide/model6/vxyz_mesh"
-
-
-
-
-
-inum=(0,1)
-CALL READMESH_TOTAL(h_ocean,g_param%ocean_meshfile)
-!CALL READMESH_TOTAL(h_ocean,oceanmeshfile)
- 
- allocate(vxyz(3,h_mesh%node),fxyz(3,h_mesh%node))
-  
-!call readfxyz(h_ocean,fxyz,h_mesh,g_param%fxyz_file) 
- !call readvxyz(h_ocean,vxyz,h_mesh,g_param%vxyz_file)
-call readfxyz(h_ocean,fxyz,h_mesh,g_param%fxyz_file) 
-call readvxyz(h_ocean,vxyz,h_mesh,g_param%vxyz_file)
-
 
 !#[0]## set
   nsr_inv  = g_param_joint%nsr_inv   ! 2017.08.31
@@ -485,31 +455,18 @@ do iele=1, h_mesh%ntet  ! start elemetn loop
 
   !# [4] ## Second term from i * omega * mu * sigma * int{ sigma w cdot w }dv {Bsl}
   !# [4-1] ## assemble coefficient for i * omega*
- j = h_mesh%n4flag(iele,1)                 ! 2017.09.29
+  j = h_mesh%n4flag(iele,1)                 ! 2017.09.29
   if ( j .eq. 1 ) sigma=g_cond%sigma_air    ! 2017.09.29
-  if ( j .eq. 2 ) sigma=3.31
- ! if ( j .eq. 2 ) sigma=g_cond%sigma_air  
- ! if ( j .eq. 4 ) sigma=0.002
-  if ( j .ge. 3 ) then                      ! 2017.09.29
-   if ( g_cond%condflag .eq. 0  ) sigma = g_cond%sigma_land(j-1) ! 2017.09.29
+  if ( j .ge. 2 ) then                      ! 2017.09.29
+   if ( g_cond%condflag .eq. 0  )     sigma = g_cond%sigma_land(j-1) ! 2017.09.29
    if ( g_cond%condflag .eq. 1  ) then ! condflag = 1 -> file conductivity
     sigma = g_cond%sigma(iele - g_cond%nphys1) ! sigma store only nphys=2 element
    end if
- ! else if ( h_mesh%n4flag(iele,1) .ge. 3 ) then
- !   write(*,*) "GEGEGE h_mesh%n4flag(iele,1) = ",h_mesh%n4flag(iele,1)
- !  stop
-end if
-
-if(j.ge.3 .and. iele.eq.900000)then
-   write(6,*)sigma
-end if
-
-
-
- 
- sigma = sigma + iunit*omega*epsilon ! 2018.06.25
-
- !write(6,*)iunit*omega*epsilon
+  else if ( h_mesh%n4flag(iele,1) .ge. 3 ) then
+    write(*,*) "GEGEGE h_mesh%n4flag(iele,1) = ",h_mesh%n4flag(iele,1)
+    stop
+  end if
+  sigma = sigma + iunit*omega*epsilon ! 2018.06.25
 
 !  if ( h_mesh%n4flag(iele,2) .ge. 4 ) sigma=0.01d0   ! ocean
   BB =iunit*omega*dmu*sigma *L0**2.d0 ! BB is complex in ww, dn_dx twice
@@ -546,93 +503,29 @@ end if
 
   !# [7] ## set right hand side vector, rf  #################### Right Hand Side
   !# [7-1] ## method for js expressed by Heaviseide function
- ! do j=1,nsr_inv  ! 2017.07.13
- !  call checksourceelement(x3s(:,j),x3e(:,j),elm_xyz,itrue,x3p1,x3p2)!check penetration
- !  if (itrue) then ! when the cell includes the wire current
- !   !CALL checkcoeff(elm_xyz,xx,gn,elm_k,S,6,S1,6,6,v)
- !   call nodebasisfun(elm_xyz,x3p1,a1)
- !   call nodebasisfun(elm_xyz,x3p2,a2)
- !   localPQ(1:3)=x3p2(1:3) - x3p1(1:3) ! [km]!
+  do j=1,nsr_inv  ! 2017.07.13
+   call checksourceelement(x3s(:,j),x3e(:,j),elm_xyz,itrue,x3p1,x3p2)!check penetration
+   if (itrue) then ! when the cell includes the wire current
+    !CALL checkcoeff(elm_xyz,xx,gn,elm_k,S,6,S1,6,6,v)
+    call nodebasisfun(elm_xyz,x3p1,a1)
+    call nodebasisfun(elm_xyz,x3p2,a2)
+    localPQ(1:3)=x3p2(1:3) - x3p1(1:3) ! [km]
 
-!    do i=1,6
-!     k=kl(i,1)
-!     l=kl(i,2)
-!     ii=l_line%n6line(iele,i)*idirection(i)
-!     rhs1= dmu*sparam%I*( &
-!     &   (a1(k)+a2(k))/2.d0 * inner(gn(1:3,l),localPQ) &
-!     &  -(a1(l)+a2(l))/2.d0 * inner(gn(1:3,k),localPQ) &
-!     &   )*idirection(i)*1.d+6 ! [V/m] -> [mV/km]
-!     rf(ii,j)=rf(ii,j) + rhs1  ! 2017.07.13
-!    end do
-!   end if ! itrue is .true. end
-  !  end do  ! nsr_inv loop, 2017.07.13
-
-  j = h_mesh%n4flag(iele,1)
-
-S2(1:6)=(0,0)
-
-
-if ( j .eq. 2 )then ! when iele is included in ocean mesh
-
-   do i=1,4     ! mean v*F in the tetrahedral element
- 
-   no(i)=h_mesh%n4(iele,i)
-     
-   F(1:3)=fxyz(1:3,no(i))!*(cos(pi/2)+inum*sin(pi/2))!(nT)
-
-
-   vF(1:3,i) = cr_outer(vxyz(1:3,no(i)),F(1:3)) ![m/s]*[nT]=[nV/m]
-   ! vF(1:3,i) = inner_r(vxyz(1:3,no(i)),F(1:3))
-
-  ! vF(1:3,i)=(0.00000000001,0.00000000000001)
-        
-end do
-
-elementnode=4
-
-
-  do i=1,6
-   k=kl(i,1);l=kl(i,2)
-   do j=1,4
-            
-      S2(i) = S2(i)+dmu*sigma*(intv(k,j,v)*rc_inner(gn(:,l),vF(:,j)) &
-           &    -  intv(l,j,v)*rc_inner(gn(:,k),vF(:,j)))*idirection(i)*(1.d+3)!m/s-->>>mm/s
-
-    !  S2(i)=(0.1,0.1)
-
-
-
-end do
-
-end do
-
-end if
-
-
-
-
-
-
-!# [6] ## set right hand side vector, b_vec  ########################
-!write(6,*)iele
-
-
-
-do i=1,6
-
-   ii=l_line%n6line(iele,i)*idirection(i)
-   
-   rf(ii,1) = rf(ii,1)+S2(i)!(mV/km)
-  ! write(6,*)rf(ii,1)
-  ! rf(ii,2) = rf(ii,1)+S2(i)!
-
-  ! rf(ii,1:2)=1.0
-  
-end do
-
+    do i=1,6
+     k=kl(i,1)
+     l=kl(i,2)
+     ii=l_line%n6line(iele,i)*idirection(i)
+     rhs1= dmu*sparam%I*( &
+     &   (a1(k)+a2(k))/2.d0 * inner(gn(1:3,l),localPQ) &
+     &  -(a1(l)+a2(l))/2.d0 * inner(gn(1:3,k),localPQ) &
+     &   )*idirection(i)*1.d+6 ! [V/m] -> [mV/km]
+     rf(ii,j)=rf(ii,j) + rhs1  ! 2017.07.13
+    end do
+   end if ! itrue is .true. end
+  end do  ! nsr_inv loop, 2017.07.13
 end do ! element loop end
 
-write(*,*) "### GENMAT END !! ###"! 2017.12.22
+!write(*,*) "### GENMAT END !! ###" 2017.12.22
 
 !  do i=1,l_line%nline
 !   if (rf(i) .ne. 0.d0) write(*,*) i,"b=",rf(i)
@@ -1049,3 +942,4 @@ logical        ::  found
       enddo
       return
       end subroutine  sup_iccg
+end module forward_joint_inv ! 2026.03.03
