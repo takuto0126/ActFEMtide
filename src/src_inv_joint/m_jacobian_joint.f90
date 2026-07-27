@@ -38,6 +38,14 @@ implicit none
   type(complex_crs_matrix) :: dzyydm ! 
  end type
 
+ !# 2023.12.22 Jacoain for tipper
+ type tip_dm
+  integer(4) :: nobs_mt             ! for each freqency
+  integer(4) :: nmodelactive        ! 2023.12.22
+  type(complex_crs_matrix) :: dtxdm ! [nobs,nmodelactive]  
+  type(complex_crs_matrix) :: dtydm ! 
+ end type
+
 contains
 
 !###########################
@@ -192,6 +200,7 @@ type(watch) :: t_watch
 
 return
 end
+
 !########################### gen jacobian
 !# nmodelactive is introduced on 2018.06.22
 !# Modified on 2017.09.03
@@ -254,7 +263,8 @@ type(watch)                             :: t_watch          ! see m_caltime.f90 
  nmodel       = g_model%nmodel
  nmodelactive = g_model%nmodelactive ! 2018.06.21
  allocate( iactive(nmodel) )         ! 2018.06.21
- iactive      = g_model%iactive      ! 2018.06.21 nphys2       = g_model%nphys2
+ iactive      = g_model%iactive      ! 2018.06.21
+ nphys2       = g_model%nphys2
  allocate(stack(0:nmodel),item(nphys2))
  allocate(logrho_model(nmodel))
  stack        = g_model%model2ele%stack
@@ -312,7 +322,7 @@ type(watch)                             :: t_watch          ! see m_caltime.f90 
 
      !#[2-2]## Second term from i * omega * mu * sigma * int{ sigma w cdot w }dv {Bsl}
      !# [4-1] ## assemble coefficient for i * omega*
-     if ( h_mesh%n4flag(iele,1) .lt. 3 ) goto 99 ! in the case of not in land
+     if ( h_mesh%n4flag(iele,1) .lt. 2 ) goto 99 ! in the case of not in land
      RM    = g_model%logrho_model(imodel) ! log10(rho)
      sigma = 10**(-RM)                     ! sigma = 1/10**(log10(rho)) = 10**(-M)
      !   write(*,*) "imodel=",imodel,"sigma=",sigma,"RM=",RM
@@ -391,7 +401,7 @@ type(watch)                             :: t_watch          ! see m_caltime.f90 
  call watchstop(t_watch)  ! see m_caltime.f90 2017.12.12
 
 !write(*,'(a,i2,a,i2,a,f9.4,a)') " ### GENJACOBIAN1   END !! ###  ip =",ip," /",np," Time =",t_watch%time," [min]" !2020.09.18
-write(*,'(a,i2,a,i2)') " ### GENJACOBIAN1   END !! ###  ip =",ip !" /",np," Time =",t_watch%time," [min]" !2020.09.18
+write(*,'(a,i2,a,i2)') " ### GENJACOBIAN1     END !! ###  ip =",ip !" /",np," Time =",t_watch%time," [min]" !2020.09.18
 return
 
 !# error #
@@ -409,72 +419,93 @@ stop
 
 end
 
-!########################### gen jacobian
-!# nmodelactive is introduced on 2018.06.22
-!# Modified on 2017.09.03
-!# Coded on 2017.05.16
-subroutine genjacobian1_mt(nobs_mt,nline,ut_mt,bs_mt,PT_mt,g_model,h_mesh,l_line,omega,g_mtdm,g_param_joint,ip,np) !2020.09.18
-  use matrix            ! see m_matrix.f90
-  use modelpart         ! see m_modelpart.f90
-  use line_type         ! see m_line_type.f90
-  use constants         ! see m_constants.f90
-  use outerinnerproduct ! see m_outerinnerproduct.f90
-  use fem_util          ! for volume, intv, (see m_fem_utiil.f90 )
-  use fem_edge_util     ! see fem_edge_util.f90
-  use mesh_type         ! see m_mesh_type.f90
-  use caltime           ! see m_caltime.f90 2017.09.06
-  use param_jointinv       ! see m_param_jointinv.f90  2018.10.05
-  implicit none
-  integer(4),              intent(in)     :: ip,np          ! 2020.09.18
-  type(param_joint),       intent(in)     :: g_param_joint  ! 2018.10.05
-  integer(4),              intent(in)     :: nobs_mt,nline
-  type(complex_crs_matrix),intent(in)     :: ut_mt(4)       ! [nobs,nline]  
-  complex(8),              intent(in)     :: bs_mt(nline,2) !  2017.09.03
-  type(real_crs_matrix),   intent(in)     :: PT_mt(4)       ! [nobs,nline] 2018.10.05
-  type(model),             intent(in)     :: g_model
-  type(line_info),         intent(in)     :: l_line
-  type(mesh),              intent(in)     :: h_mesh
-  real(8),                 intent(in)     :: omega
-  type(mt_dm),             intent(inout)  :: g_mtdm           ! 2022.01.05
-!============================  internal variables =============================
-  type(complex_crs_matrix)                :: utt            ! 2018.10.05
-  type(complex_crs_matrix)                :: dzxx  ! 2017.09.03 (->g_mtdm)
-  type(complex_crs_matrix)                :: dzxy  ! 2017.09.03 (->g_mtdm)
-  type(complex_crs_matrix)                :: dzyx  ! 2017.09.03 (->g_mtdm)
-  type(complex_crs_matrix)                :: dzyy  ! 2017.09.03 (->g_mtdm)
-  complex(8),    dimension(nobs_mt,2)       :: be               ! 2022.01.05
-  integer(4)                              :: nmodel,nphys2
-  integer(4)                              :: imodel,i,j,k,l,m,n,ii,jj,kk!2018.06.21
-  integer(4)                              :: iele,idirection(6),n6line(6)
-  integer(4),allocatable,dimension(:)     :: stack,item
-  real(8),   allocatable,dimension(:)     :: logrho_model
-  complex(8),allocatable,dimension(:,:)   :: AAL,dbeobs       ! 2017.09.03
-  complex(8),allocatable,dimension(:,:)   :: dzxxdm       ! 2017.09.03
-  complex(8),allocatable,dimension(:,:)   :: dzxydm       ! 2017.09.03
-  complex(8),allocatable,dimension(:,:)   :: dzyxdm       ! 2017.09.03
-  complex(8),allocatable,dimension(:,:)   :: dzyydm       ! 2017.09.03
-  real(8)                                 :: threshold =1.d-10
-  integer(4)                              :: nmodelactive     ! 2018.06.21
-  integer(4),allocatable,dimension(:)     :: iactive          ! 2018.06.21
-  integer(4),            dimension(5)     :: iflag_comp       ! 2018.10.05
-  integer(4)                              :: icomp            ! 2018.10.05
-  !# for dA/dm
-  complex(8)                              :: S1(6,6)
-  real(8)                                 :: elm_xyz(3,4),yy,gn(3,4),v
-  real(8)                                 :: RM,sigma         ! model = log10(rho)
-  complex(8)                              :: dBBdm, iunit=(0.d0,1.d0)
-  real(8),   parameter                    :: L0=1.d+3         ! [m]  scale length
-  complex(8),allocatable,dimension(:,:)   :: utfull           ! 2017.09.03
-  complex(8)                              :: z                ! 2017.09.03
-  type(watch)                             :: t_watch          ! see m_caltime.f90
-  complex(8) :: D,Dinv,Dinv2,hx1,hx2,hy1,hy2,ex1,ex2,ey1,ey2 ! 2022.01.05
-  complex(8) :: dhx1,dhx2,dhy1,dhy2,dex1,dex2,dey1,dey2
-  complex(8),dimension(nobs_mt,2 )        :: exo,eyo,hxo,hyo
-  complex(8),dimension(nobs_mt,2,g_model%nmodelactive) :: dexo,deyo,dhxo,dhyo
-  integer(4),parameter :: nsr_mt=2
-  call watchstart(t_watch) ! see m_caltime.f90 2017.12.22
+!##################################################### gen jacobian
+subroutine genjacobian1_mt(TIP,nobs_mt,nline,ut_mt,bs_mt,PT_mt,g_model,h_mesh,&
+ &                         l_line,omega,g_mtdm,g_tipdm,g_param_joint,ip,np) !2023.12.26
+ !# g_tipdm is added on 2023.12.26
+ !# Explanation
+   !#  Ax = f
+   !#  dA/dm*x + Adx/dm = 0
+   !#  dx/dm =  - A^-1 [dA/dm*x]
+   !#  p^T dx/dm = - u^T [dA/dm*x] (Au = p)
+ !# modules
+   use matrix            ! see m_matrix.f90
+   use modelpart         ! see m_modelpart.f90
+   use line_type         ! see m_line_type.f90
+   use constants         ! see m_constants.f90
+   use outerinnerproduct ! see m_outerinnerproduct.f90
+   use fem_util          ! for volume, intv, (see m_fem_utiil.f90 )
+   use fem_edge_util     ! see fem_edge_util.f90
+   use mesh_type         ! see m_mesh_type.f90
+   use caltime           ! see m_caltime.f90 2017.09.06
+   use param_jointinv       ! see m_param_jointinv.f90  2018.10.05
+   implicit none
+ !# declaration
+   logical,                 intent(in)     :: TIP            ! 2026.03.02
+   integer(4),              intent(in)     :: ip,np          ! 2020.09.18
+   type(param_joint),       intent(in)     :: g_param_joint  ! 2018.10.05
+   integer(4),              intent(in)     :: nobs_mt,nline
+   type(complex_crs_matrix),intent(in)     :: ut_mt(5)       ! [nobs,nline] 5 for bz 2026.03.01
+   complex(8),              intent(in)     :: bs_mt(nline,2) !  2017.09.03
+   type(real_crs_matrix),   intent(in)     :: PT_mt(5)       ! [nobs,nline] 2026.03.01
+   type(model),             intent(in)     :: g_model
+   type(line_info),         intent(in)     :: l_line
+   type(mesh),              intent(in)     :: h_mesh
+   real(8),                 intent(in)     :: omega
+   type(mt_dm),             intent(inout)  :: g_mtdm          ! 2022.01.05
+   type(tip_dm),            intent(inout)  :: g_tipdm         ! 2023.12.25
+ !# declaration for internal variables 
+   type(complex_crs_matrix)                :: utt   ! 2018.10.05
+   type(complex_crs_matrix)                :: dzxx  ! 2017.09.03 (->g_mtdm)
+   type(complex_crs_matrix)                :: dzxy  ! 2017.09.03 (->g_mtdm)
+   type(complex_crs_matrix)                :: dzyx  ! 2017.09.03 (->g_mtdm)
+   type(complex_crs_matrix)                :: dzyy  ! 2017.09.03 (->g_mtdm)
+   type(complex_crs_matrix)                :: dtx   ! 2024.08.30
+   type(complex_crs_matrix)                :: dty   ! 2024.08.30
+   complex(8),    dimension(nobs_mt,2)     :: be               ! 2022.01.05
+   integer(4)                              :: nmodel,nphys2
+   integer(4)                              :: imodel,i,j,k,l,m,n,ii,jj,kk!2018.06.21
+   integer(4)                              :: iele,idirection(6),n6line(6)
+   integer(4),allocatable,dimension(:)     :: stack,item
+   real(8),   allocatable,dimension(:)     :: logrho_model
+   complex(8),allocatable,dimension(:,:)   :: AAL,dbeobs       ! 2017.09.03
+   complex(8),allocatable,dimension(:,:)   :: dzxxdm       ! 2017.09.03
+   complex(8),allocatable,dimension(:,:)   :: dzxydm       ! 2017.09.03
+   complex(8),allocatable,dimension(:,:)   :: dzyxdm       ! 2017.09.03
+   complex(8),allocatable,dimension(:,:)   :: dzyydm       ! 2017.09.03
+   complex(8),allocatable,dimension(:,:)   :: dtxdm       ! 2024.08.29
+   complex(8),allocatable,dimension(:,:)   :: dtydm       ! 2024.08.29
+   real(8)                                 :: threshold =1.d-10
+   integer(4)                              :: nmodelactive     ! 2018.06.21
+   integer(4),allocatable,dimension(:)     :: iactive          ! 2018.06.21
+   integer(4),            dimension(5)     :: iflag_comp       ! 2018.10.05
+   integer(4)                              :: icomp            ! 2018.10.05
+ !# declaration for dA/dm
+   complex(8)                              :: S1(6,6)
+   real(8)                                 :: elm_xyz(3,4),yy,gn(3,4),v
+   real(8)                                 :: RM,sigma         ! model = log10(rho)
+   complex(8)                              :: dBBdm, iunit=(0.d0,1.d0)
+   real(8),   parameter                    :: L0=1.d+3         ! [m]  scale length
+   complex(8),allocatable,dimension(:,:)   :: utfull           ! 2017.09.03
+   complex(8)                              :: z                ! 2017.09.03
+   type(watch)                             :: t_watch          ! see m_caltime.f90
+   complex(8) :: D,Dinv,Dinv2,hx1,hx2,hy1,hy2,hz1,hz2,ex1,ex2,ey1,ey2 ! hz1,z2 for tipper 2026.03.02
+   complex(8) :: dhx1,dhx2,dhy1,dhy2,dex1,dex2,dey1,dey2,dhz1,dhz2 ! dhz1,dhz2 for tipper 2026.03.02
+   complex(8),dimension(nobs_mt,2 )        :: exo,eyo,hxo,hyo,hzo ! hzo for tipper 2026.03.02
+   complex(8),allocatable,dimension(:,:,:) :: dexo,deyo,dhxo,dhyo,dhzo ! 2026.03.02, dhzo is added for tipper
+   integer(4),parameter :: nsr_mt=2
+ !# for addition of Tip
+   integer(4)                              :: ncomp
 
-  !#[0]## set and allocate
+ !#[-1]## allocation and watch start
+   call watchstart(t_watch) ! see m_caltime.f90 2017.12.22
+   allocate(dexo(nobs_mt,2,g_model%nmodelactive)) ! 2022.12.06
+   allocate(deyo(nobs_mt,2,g_model%nmodelactive)) ! 2022.12.06
+   allocate(dhxo(nobs_mt,2,g_model%nmodelactive)) ! 2022.12.06
+   allocate(dhyo(nobs_mt,2,g_model%nmodelactive)) ! 2022.12.06
+   if (TIP) allocate(dhzo(nobs_mt,2,g_model%nmodelactive)) ! 2026.03.02
+
+ !#[0]## set integers and allocate
    nmodel       = g_model%nmodel
    nmodelactive = g_model%nmodelactive ! 2018.06.21
    allocate( iactive(nmodel) )         ! 2018.06.21
@@ -487,118 +518,118 @@ subroutine genjacobian1_mt(nobs_mt,nline,ut_mt,bs_mt,PT_mt,g_model,h_mesh,l_line
    logrho_model = g_model%logrho_model
    allocate(utfull(nline,nobs_mt))        ! 2018.10.05
    allocate( AAL(6,nsr_mt) )
-   allocate( dbeobs(nobs_mt,2)            )       ! 2018.10.05
+   allocate( dbeobs(nobs_mt,2)            ) ! 2018.10.05
    allocate( dzxxdm(nobs_mt,nmodelactive) ) ! 2018.06.22
    allocate( dzxydm(nobs_mt,nmodelactive) ) ! 2018.06.22
    allocate( dzyxdm(nobs_mt,nmodelactive) ) ! 2018.06.22
    allocate( dzyydm(nobs_mt,nmodelactive) ) ! 2018.06.22
+   if (TIP) allocate( dtxdm(nobs_mt,nmodelactive) )  ! 2026.03.02
+   if (TIP) allocate( dtydm(nobs_mt,nmodelactive) )  ! 2026.03.02
 
-!#  Ax = f
-!#  dA/dm*x + Adx/dm = 0
-!#  dx/dm =  - A^-1 [dA/dm*x]
-!#  p^T dx/dm = - u^T [dA/dm*x] (Au = p)
+ !#[1]## cal bx,by,ex,ey
+ ncomp = 4 ! bx,by,ex,ey       2023.12.26
+ if (TIP) ncomp = 5 ! 5 for bz  2023.12.26
+ do icomp = 1,ncomp ! 4 without tipper, 5 icludes tipper 2026.03.01 
+   utt    = ut_mt(icomp)                 ! 2018.10.05
+   utfull = 0.d0                         ! 2017.09.03
+   do   i = 1,utt%nrow                   ! 2017.09.03
+     do j=utt%stack(i-1)+1,utt%stack(i)  ! 2017.09.03
+       utfull(utt%item(j),i) = utt%val(j)! 2017.09.03
+     end do                              ! 2017.09.03
+   end do                                ! 2017.09.03
+   if ( icomp .eq. 3 .or. icomp .eq. 4 ) utfull = -iunit*omega*utfull ! only for Ex, Ey 2026.03.02
 
-!#[1]## cal bx,by,ex,ey
-do icomp = 1,4 ! bx,by,ex,ey
-  utt    = ut_mt(icomp)                 ! 2018.10.05
-  utfull = 0.d0                      ! 2017.09.03
-  do   i = 1,utt%nrow                ! 2017.09.03
-    do j=utt%stack(i-1)+1,utt%stack(i)! 2017.09.03
-     utfull(utt%item(j),i) = utt%val(j) ! 2017.09.03
-    end do                            ! 2017.09.03
-  end do                             ! 2017.09.03
-  if ( icomp .ge. 3 ) utfull = -iunit*omega*utfull ! only for Ex, Ey
-
-  !#[1]## cal either of bx,by,ex,ey dependent on icomp
-  be = 0.d0
-  do i=1,nsr_mt                     ! nsr_mt = 2 2022.01.12
-     call mul_matcrs_cv(PT_mt(icomp),bs_mt(:,i),nline,be(:,i))!be[nobs_mt,2] 2018.10.05
-  end do
-  if ( icomp .ge. 3 ) be    = -iunit*omega*be        ! only for electric field
+   !#[1-1]## cal either of bx,by,ex,ey, bz dependent on icomp
+     be = 0.d0
+     do i=1,nsr_mt                     ! nsr_mt = 2 2022.01.12
+       call mul_matcrs_cv(PT_mt(icomp),bs_mt(:,i),nline,be(:,i))!be[nobs_mt,2] 2018.10.05
+     end do
+     if ( icomp .eq. 3 .or. icomp .eq. 4 ) be  = -iunit*omega*be ! only for electric field 2026.03.02
   
-  !#[2]## cal ut*dA/dm*Al
+   !#[1-2]## cal ut*dA/dm*Al
+     kk=0
+     do imodel=1,nmodel
+       if ( iactive(imodel) .ne. 1 ) cycle ! 2018.06.22
+       kk = kk + 1                         ! 2018.06.22
+       AAL    = 0.d0                       ! 2017.09.03
+       dbeobs = 0.d0                       ! 2018.10.05 either of bx,by,bz,ex,ey
+       do jj=stack(imodel-1)+1,stack(imodel) ! element loop for i-th model
+         iele=item(jj)
 
-  kk=0 ! 2018.06.21
-  do imodel=1,nmodel
-    if ( iactive(imodel) .ne. 1 ) cycle ! 2018.06.22
-    kk = kk + 1                         ! 2018.06.22
-    AAL    = 0.d0                       ! 2017.09.03
-    dbeobs = 0.d0                       ! 2018.10.05 either of bx,by,bz,ex,ey
-    do jj=stack(imodel-1)+1,stack(imodel) ! element loop for i-th model
-      iele=item(jj)
+         !#[1-2-1]## ! check the direction of edge, compared to the defined lines
+           idirection(1:6)=1
+           n6line(1:6) = l_line%n6line(iele,1:6)
+           do j=1,6
+             if ( n6line(j) .lt. 0 ) idirection(j)=-1
+             n6line(j) = n6line(j)*idirection(j)
+           end do
+           do j=1,4
+             elm_xyz(1:3,j)=h_mesh%xyz(1:3,h_mesh%n4(iele,j)) ! [km]
+           end do
+           call gradnodebasisfun(elm_xyz,gn,v) ! see fem_util.f90
+
+         !#[1-2-2]## Second term from i * omega * mu * sigma * int{ sigma w cdot w }dv {Bsl}
+           !# [4-1] ## assemble coefficient for i * omega*
+           if ( h_mesh%n4flag(iele,1) .lt. 2 ) goto 99 ! in the case of not in land
+           RM    = g_model%logrho_model(imodel) ! log10(rho)
+           sigma = 10**(-RM) ! sigma = 1/10**(log10(rho)) = 10**(-M)
+           !   write(*,*) "imodel=",imodel,"sigma=",sigma,"RM=",RM
   
-     !#[2-1]## ! check the direction of edge, compared to the defined lines
-     idirection(1:6)=1
-     n6line(1:6) = l_line%n6line(iele,1:6)
-     do j=1,6
-       if ( n6line(j) .lt. 0 ) idirection(j)=-1
-       n6line(j) = n6line(j)*idirection(j)
-     end do
-     do j=1,4
-       elm_xyz(1:3,j)=h_mesh%xyz(1:3,h_mesh%n4(iele,j)) ! [km]
-     end do
-     call gradnodebasisfun(elm_xyz,gn,v) ! see fem_util.f90
+         !#[1-2-3]## dBB/dm
+           !# BB     = iunit*omega*dmu*10^(-M)  (where M=log10(rho))
+           !# dBB/dm = iunit*omega*dmu*{10^-M)}*(-log10)
+           dBBdm =iunit*omega*dmu*sigma*L0**2.d0*(-log(10.d0))
 
-     !#[2-2]## Second term from i * omega * mu * sigma * int{ sigma w cdot w }dv {Bsl}
-     !# [4-1] ## assemble coefficient for i * omega*
-     if ( h_mesh%n4flag(iele,1) .lt. 2 ) goto 99 ! in the case of not in land
-     RM    = g_model%logrho_model(imodel) ! log10(rho)
-     sigma = 10**(-RM) ! sigma = 1/10**(log10(rho)) = 10**(-M)
-     !   write(*,*) "imodel=",imodel,"sigma=",sigma,"RM=",RM
-  
-     !#[2-3]##
-     !# BB     = iunit*omega*dmu*10^(-M)  (where M=log10(rho))
-     !# dBB/dm = iunit*omega*dmu*{10^-M)}*(-log10)
-     dBBdm =iunit*omega*dmu*sigma*L0**2.d0*(-log(10.d0))
+         !#[2-4] ## assemble scheme No.2 ( analytical assembly)
+           S1(:,:)=(0.d0,0.d0)
+           do i=1,6
+             do j=1,6
+               k=kl(i,1);l=kl(i,2) ; m=kl(j,1) ; n=kl(j,2) ! gn*gn [km^-2], intv [km^3], yy[km]
+               yy =      intv(k,m,v)*inner(gn(:,l), gn(:,n))   & ! first term
+               &	    -  intv(k,n,v)*inner(gn(:,l), gn(:,m))   & ! second term
+               &      -  intv(l,m,v)*inner(gn(:,k), gn(:,n))   & ! third term
+               &      +  intv(l,n,v)*inner(gn(:,k), gn(:,m))     ! forth term
+               S1(i,j)= yy*idirection(i)*idirection(j)*dBBdm  ! S1 [km*rad/s*S/m]
+             end do
+           end do
+           AAL = 0.d0  ! 2017.09.03
+           do i=1,6
+             ii = n6line(i)
+             do j=1,6
+               do k=1,nsr_mt    ! 2017.09.03
+                 AAL(i,k)=AAL(i,k) + S1(i,j)*bs_mt(n6line(j),k) ! (dA/dm)*Al 2017.09.03
+               end do            ! 2017.09.03
+             end do
+           end do
+           !# uT * (-AAL)
+           do i=1,utt%nrow  ! 2018.10.05 obs loop
+             do k=1,nsr_mt  ! 2022.01.05  src loop
+               do j=1,6        ! 2017.09.03  inside tetrahedron
+                 ii = n6line(j) ! 2017.09.03
+                 dbeobs(i,k) = dbeobs(i,k) + utfull(ii,i)*(-AAL(j,k)) ! i: obs, k: MT pol. for model kk
+               end do          ! 2017.09.03
+             end do          ! 2017.09.03
+           end do           ! 2017.09.03           
+       end do ! element loop (iele) for i-thmodel elemnt loop
 
-     !#[2-4] ## assemble scheme No.2 ( analytical assembly)
-     S1(:,:)=(0.d0,0.d0)
-     do i=1,6
-       do j=1,6
-         k=kl(i,1);l=kl(i,2) ; m=kl(j,1) ; n=kl(j,2) ! gn*gn [km^-2], intv [km^3], yy[km]
-         yy =      intv(k,m,v)*inner(gn(:,l), gn(:,n))   & ! first term
-         &	    -  intv(k,n,v)*inner(gn(:,l), gn(:,m))   & ! second term
-         &      -  intv(l,m,v)*inner(gn(:,k), gn(:,n))   & ! third term
-         &      +  intv(l,n,v)*inner(gn(:,k), gn(:,m))     ! forth term
-         S1(i,j)= yy*idirection(i)*idirection(j)*dBBdm  ! S1 [km*rad/s*S/m]
-       end do
-     end do
-     AAL = 0.d0  ! 2017.09.03
-     do i=1,6
-       ii = n6line(i)
-       do j=1,6
-         ! write(*,101) "iele",iele,"i,j,",i,j,"bs(n6line)=",bs(n6line(j)),"S1(i,j)",S1(i,j)
-         do k=1,nsr_mt    ! 2017.09.03
-           AAL(i,k)=AAL(i,k) + S1(i,j)*bs_mt(n6line(j),k) ! (dA/dm)*Al 2017.09.03
-         end do            ! 2017.09.03
-       end do
-     end do
-     !# uT * (-AAL)
-     do i=1,utt%nrow  ! 2018.10.05 obs loop
-       do k=1,nsr_mt  ! 2022.01.05  src loop
-         do j=1,6        ! 2017.09.03  inside tetrahedron
-           ii = n6line(j) ! 2017.09.03
-           dbeobs(i,k) = dbeobs(i,k) + utfull(ii,i)*(-AAL(j,k)) ! i: obs, k: MT pol. for model kk
-         end do          ! 2017.09.03
-       end do          ! 2017.09.03
-     end do           ! 2017.09.03
-   end do ! element loop (iele) for i-thmodel elemnt loop
-
-    if (     icomp .eq. 1) then ! bx, dbx
-      hxo(:,1:2)     = be(:,1:2) 
-      dhxo(:,1:2,kk) = dbeobs(:,1:2)
-    else if (icomp .eq. 2) then ! by, dby
-      hyo(:,1:2)     = be(:,1:2)
-      dhyo(:,1:2,kk) = dbeobs(:,1:2)
-    else if (icomp .eq. 3) then ! ex, dex
-      exo(:,1:2)     = be(:,1:2)
-      dexo(:,1:2,kk) = dbeobs(:,1:2)
-    else if (icomp .eq. 4) then ! ey, dey
-      eyo(:,1:2)     = be(:,1:2)
-      deyo(:,1:2,kk) = dbeobs(:,1:2)
-    end if
-  end do ! model loop end
-end do ! icomp end
+       if (     icomp .eq. 1) then ! bx, dbx
+         hxo(:,1:2)     = be(:,1:2) 
+         dhxo(:,1:2,kk) = dbeobs(:,1:2)
+       else if (icomp .eq. 2) then ! by, dby
+         hyo(:,1:2)     = be(:,1:2)
+         dhyo(:,1:2,kk) = dbeobs(:,1:2)
+       else if (icomp .eq. 3) then ! ex, dex
+         exo(:,1:2)     = be(:,1:2)
+         dexo(:,1:2,kk) = dbeobs(:,1:2)
+       else if (icomp .eq. 4) then ! ey, dey
+         eyo(:,1:2)     = be(:,1:2)
+         deyo(:,1:2,kk) = dbeobs(:,1:2)
+       else if (icomp .eq. 5) then ! bz, dbz 2026.03.01
+         hzo(:,1:2)     = be(:,1:2)
+         dhzo(:,1:2,kk) = dbeobs(:,1:2)
+       end if
+     end do ! model loop end
+ end do ! icomp end
 
  call watchstart(t_watch) ! 2017.09.06
 
@@ -615,90 +646,106 @@ end do ! icomp end
   end do
  end if
 
-kk=0
-do imodel = 1,nmodel
-  if ( iactive(imodel) .ne. 1 ) cycle ! 2018.06.22
-  kk = kk + 1                         ! 2018.06.22
-  do i=1,nobs_mt
-   hx1 = hxo(i,1) ; hy1 = hyo(i,1)
-   hx2 = hxo(i,2) ; hy2 = hyo(i,2)
-   ex1 = exo(i,1) ; ey1 = eyo(i,1)
-   ex2 = exo(i,2) ; ey2 = eyo(i,2)
-   dhx1 = dhxo(i,1,kk) ; dhy1 = dhyo(i,1,kk)
-   dhx2 = dhxo(i,2,kk) ; dhy2 = dhyo(i,2,kk)
-   dex1 = dexo(i,1,kk) ; dey1 = deyo(i,1,kk)
-   dex2 = dexo(i,2,kk) ; dey2 = deyo(i,2,kk)
-   if ( i .eq. 1 .and. imodel .eq. 1 .and. ip .eq. 4) then
-   !write(*,*) "hx1",hx1 ! 0
-   write(*,*) "hx2",hx2 !
-   write(*,*) "hy1",hy1 !
-   !write(*,*) "hy1",hy1 ! 0
-   write(*,*) "ex1",ex1
-   !write(*,*) "ex2",ex2 ! 0
-   !write(*,*) "ey1",ey1 ! 0
-   write(*,*) "ey2",ey2
-   write(*,*) "Zxy",ex1/hy1
-   write(*,*) "Zyx",ey2/hx2
-   write(*,*) ""
-   !write(*,*) "dhx1",dhx1 ! 0
-   write(*,*) "dhx2",dhx2
-   write(*,*) "dhy1",dhy1
-   !write(*,*) "dhy2",dhy2 ! 0
-   write(*,*) "dex1",dex1
-   !write(*,*) "dex2",dex2 ! 0
-   !write(*,*) "dey1",dey1 ! 0
-   write(*,*) "dey2",dey2
-   end if
-   !# generate dzxx, dzxy, dzyx, dzyy
+ kk=0
+ do imodel = 1,nmodel
+   if ( iactive(imodel) .ne. 1 ) cycle ! 2018.06.22
+   kk = kk + 1                         ! 2018.06.22
+   do i=1,nobs_mt
+     hx1 = hxo(i,1) ; hy1 = hyo(i,1)
+     hx2 = hxo(i,2) ; hy2 = hyo(i,2)
+     ex1 = exo(i,1) ; ey1 = eyo(i,1)
+     ex2 = exo(i,2) ; ey2 = eyo(i,2)
+     dhx1 = dhxo(i,1,kk) ; dhy1 = dhyo(i,1,kk)
+     dhx2 = dhxo(i,2,kk) ; dhy2 = dhyo(i,2,kk)
+     dex1 = dexo(i,1,kk) ; dey1 = deyo(i,1,kk)
+     dex2 = dexo(i,2,kk) ; dey2 = deyo(i,2,kk)
+     if (TIP) then ! 2026.03.02
+       hz1 = hzo(i,1)      ; hz2 = hzo(i,2)
+       dhz1 = dhzo(i,1,kk) ; dhz2 = dhzo(i,2,kk)
+     end if
+     if ( i .eq. 1 .and. imodel .eq. 1 .and. ip .eq. 4 .and. .false. ) then
+       !write(*,*) "hx1",hx1 ! 0
+       write(*,*) "hx2",hx2 !
+       write(*,*) "hy1",hy1 !
+       !write(*,*) "hy1",hy1 ! 0
+       write(*,*) "hz1",hz1 ! 2026.03.02
+       write(*,*) "hz2",hz2 ! 2026.03.02
+       write(*,*) "ex1",ex1
+       !write(*,*) "ex2",ex2 ! 0
+       !write(*,*) "ey1",ey1 ! 0
+       write(*,*) "ey2",ey2
+       write(*,*) "Zxy",ex1/hy1
+       write(*,*) "Zyx",ey2/hx2
+       write(*,*) ""
+       !write(*,*) "dhx1",dhx1 ! 0
+       write(*,*) "dhx2",dhx2
+       write(*,*) "dhy1",dhy1
+       !write(*,*) "dhy2",dhy2 ! 0
+       write(*,*) "dex1",dex1
+       !write(*,*) "dex2",dex2 ! 0
+       !write(*,*) "dey1",dey1 ! 0
+       write(*,*) "dey2",dey2
+       write(*,*) "dhz1",dhz1 ! 2026.03.02
+       write(*,*) "dhz2",dhz2 ! 2026.03.02
+     end if
+     !# generate dzxx, dzxy, dzyx, dzyy
 
-   D = hx1*hy2-hx2*hy1
-!   write(*,*) "D",D,"hx1",hx1,"hy2",hy2
-   Dinv=1./D
-   Dinv2=Dinv**2.
+     D = hx1*hy2-hx2*hy1
+     !   write(*,*) "D",D,"hx1",hx1,"hy2",hy2
+     Dinv=1./D
+     Dinv2=Dinv**2.
 
-   dzxxdm(i,kk)     =    Dinv*(hy2*dex1 + ex1*dhy2 - hy1*dex2 - ex2*dhy1) &
-   & -(ex1*hy2-ex2*hy1)*Dinv2*(hy2*dhx1 + hx1*dhy2 - hy1*dhx2 - hx2*dhy1) ! ok
+     dzxxdm(i,kk)     =    Dinv*(hy2*dex1 + ex1*dhy2 - hy1*dex2 - ex2*dhy1) &
+     & -(ex1*hy2-ex2*hy1)*Dinv2*(hy2*dhx1 + hx1*dhy2 - hy1*dhx2 - hx2*dhy1) ! ok
 
-   dzxydm(i,kk)     =    Dinv*(hx1*dex2 + ex2*dhx1 - hx2*dex1 - ex1*dhx2) &
-   & -(ex2*hx1-ex1*hx2)*Dinv2*(hy2*dhx1 + hx1*dhy2 - hy1*dhx2 - hx2*dhy1) ! ok
+     dzxydm(i,kk)     =    Dinv*(hx1*dex2 + ex2*dhx1 - hx2*dex1 - ex1*dhx2) &
+     & -(ex2*hx1-ex1*hx2)*Dinv2*(hy2*dhx1 + hx1*dhy2 - hy1*dhx2 - hx2*dhy1) ! ok
 
-   dzyxdm(i,kk)     =     Dinv*(hy2*dey1 + ey1*dhy2 - hy1*dey2 - ey2*dhy1)&
-   & -(ey1*hy2-ey2*hy1)*Dinv2*(hy2*dhx1 + hx1*dhy2 - hy1*dhx2 - hx2*dhy1) ! ok
+     dzyxdm(i,kk)     =     Dinv*(hy2*dey1 + ey1*dhy2 - hy1*dey2 - ey2*dhy1)&
+     & -(ey1*hy2-ey2*hy1)*Dinv2*(hy2*dhx1 + hx1*dhy2 - hy1*dhx2 - hx2*dhy1) ! ok
 
-   dzyydm(i,kk)     =     Dinv*(hx1*dey2 + ey2*dhx1 - hx2*dey1 - ey1*dhx2) &
-   & -(ey2*hx1-ey1*hx2)*Dinv2*(hy2*dhx1 + hx1*dhy2 - hy1*dhx2 - hx2*dhy1) ! ok
+     dzyydm(i,kk)     =     Dinv*(hx1*dey2 + ey2*dhx1 - hx2*dey1 - ey1*dhx2) &
+     & -(ey2*hx1-ey1*hx2)*Dinv2*(hy2*dhx1 + hx1*dhy2 - hy1*dhx2 - hx2*dhy1) ! ok
    
-  end do
-end do ! imodel loop
+    if (TIP) then ! 2026.03.01
 
-if ( ip .eq. 4 ) then
-  do i=1,1
-  write(*,*) "i",i
-  write(*,'(4g15.7)') dzxxdm(i,1:2)
-  write(*,'(4g15.7)') dzxydm(i,1:2)
-  write(*,'(4g15.7)') dzyxdm(i,1:2)
-  write(*,'(4g15.7)') dzyydm(i,1:2)
-  end do
-end if
+     dtxdm(i,kk)      =    Dinv*(hy2*dhz1 + hz1*dhy2 - hy1*dhz2 - hz2*dhy1) &
+     & -(hz1*hy2-hz2*hy1)*Dinv2*(hy2*dhx1 + hx1*dhy2 - hy1*dhx2 - hx2*dhy1) ! ok
 
+     dtydm(i,kk)      =    Dinv*(hx1*dhz2 + hz2*dhx1 - hx2*dhz1 - hz1*dhx2) &
+     & -(hz2*hx1-hz1*hx2)*Dinv2*(hy2*dhx1 + hx1*dhy2 - hy1*dhx2 - hx2*dhy1) ! ok
 
-!#[3]## full to complex_crs_matrix
- call conv_full2crs_complex(dzxxdm(:,:),nobs_mt,nmodelactive,dzxx,threshold)!2022.01.05
- call conv_full2crs_complex(dzxydm(:,:),nobs_mt,nmodelactive,dzxy,threshold)!2022.01.05
- call conv_full2crs_complex(dzyxdm(:,:),nobs_mt,nmodelactive,dzyx,threshold)!2022.01.05
- call conv_full2crs_complex(dzyydm(:,:),nobs_mt,nmodelactive,dzyy,threshold)!2022.01.05
+    end if
 
-!#[4]## set output
- g_mtdm%nobs_mt = nobs_mt
- g_mtdm%dzxxdm = dzxx
- g_mtdm%dzxydm = dzxy
- g_mtdm%dzyxdm = dzyx
- g_mtdm%dzyydm = dzyy
+   end do
+ end do ! imodel loop
+
+ !#[3]## full to complex_crs_matrix
+   call conv_full2crs_complex(dzxxdm,nobs_mt,nmodelactive,dzxx,threshold)!2022.01.05
+   call conv_full2crs_complex(dzxydm,nobs_mt,nmodelactive,dzxy,threshold)!2022.01.05
+   call conv_full2crs_complex(dzyxdm,nobs_mt,nmodelactive,dzyx,threshold)!2022.01.05
+   call conv_full2crs_complex(dzyydm,nobs_mt,nmodelactive,dzyy,threshold)!2022.01.05
+   if (TIP) then !2023.12.26
+     call conv_full2crs_complex(dtxdm,nobs_mt,nmodelactive,dtx,threshold)!2023.12.26
+     call conv_full2crs_complex(dtydm,nobs_mt,nmodelactive,dty,threshold)!2023.12.26
+   end if        !2023.12.26
+
+ !#[4]## set output
+   g_mtdm%nobs_mt = nobs_mt
+   g_mtdm%dzxxdm = dzxx
+   g_mtdm%dzxydm = dzxy
+   g_mtdm%dzyxdm = dzyx
+   g_mtdm%dzyydm = dzyy
+   if (TIP) then              ! 2023.12.26
+    g_tipdm%nobs_mt = nobs_mt ! 2023.12.26
+    g_tipdm%dtxdm = dtx       ! 2026.03.02 see the top of this file for the explanation of dtxdm and dtydm
+    g_tipdm%dtydm = dty       ! 2026.03.02 dtx, dty are the crsmatrices[nobs,nmodelactive]
+   end if                     ! 2023.12.26
 
  call watchstop(t_watch)
 
  !write(*,'(a,i2,a,i2,a,f9.4,a)') " ### GENJACOBIAN1   END !! ###  ip =",ip," /",np," Time =",t_watch%time," [min]" !2020.09.18
- write(*,'(a,i2,a,i2)') " ### GENJACOBIAN1_MT END !! ###  ip =",ip !" /",np," Time =",t_watch%time," [min]" !2020.09.18
+ write(*,'(a,i2,a,i2)') " ### GENJACOBIAN1_MT  END !! ###  ip =",ip !" /",np," Time =",t_watch%time," [min]" !2020.09.18
 
  return
 
@@ -709,11 +756,11 @@ end if
  do j=1,4
   write(*,*) "node=",h_mesh%n4(iele,j),"elm_xyz=",elm_xyz(1:3,j)
  end do
-stop
+ stop
 
-!# format #
-100 format(a,i3,a,i3,a,2g15.7,a,2g15.7,a,g15.7)
-101 format(a,i3,a,2i3,a,2g15.7,a,2g15.7)
+ !# format #
+   100 format(a,i3,a,i3,a,2g15.7,a,2g15.7,a,g15.7)
+   101 format(a,i3,a,2i3,a,2g15.7,a,2g15.7)
 
  end
 !############################################################# genjacobian2
@@ -786,7 +833,7 @@ type(watch) :: t_watch  ! see m_caltime.f90 2017.12.22
   do k=1,nsr_inv   ! 2017.09.04
    do j = 1,nobs   ! 2017.09.04
     do icomp = 1,5 ! 2018.10.5
-     do l = 1,2    ! 2017.09.04
+     do l = 1,2    ! 2017.09.04 amp phase
       if ( data_avail(l,icomp,i,j,k) ) then  ! 2018.10.05
        ii = ii + 1 ! current row index
 	 ncount = dapdm(l,icomp,k,i)%stack(j) - dapdm(l,icomp,k,i)%stack(j-1)
@@ -816,22 +863,27 @@ end
 !# nmodelactive is introduced on 2018.06.25
 !# modified on 2017.09.04 for multiple source inversion
 !# Coded on 2017.05.17
-subroutine genjacobian2_MT(g_param_joint,nfreq_mt,g_mtdm,JJ_mt) ! 2018.06.25
+subroutine genjacobian2_MT(TIP,g_param_joint,nfreq_mt,g_mtdm,g_tipdm,JJ_mt,JJ_tip) ! 2018.06.25
   use param_jointinv ! 2017.09.04
   use matrix
   use caltime     ! 2017.12.22
   implicit none
+  logical,                 intent(in)    :: TIP
   type(param_joint),       intent(in)    :: g_param_joint   ! 2017.09.04
   integer(4),              intent(in)    :: nfreq_mt        ! 2017.09.04
   type(mt_dm),             intent(in)    :: g_mtdm(nfreq_mt)! 2017.06.07
+  type(tip_dm),            intent(in)    :: g_tipdm(nfreq_mt)! 2026.03.03
   type(real_crs_matrix),   intent(out)   :: JJ_mt           ! Jacobian matrix [ndat,nmodel]
+  type(real_crs_matrix),   intent(out)   :: JJ_tip          ! Jacobian matrix for tipper [ndat,nmodel]2026.03.03
   !
-  type(complex_crs_matrix),dimension(4,nfreq_mt) :: dz       !(2,5,nsr,nfreq) [nobs,nmodel]
+  type(complex_crs_matrix),dimension(4,nfreq_mt) :: dz       !(2,4,nsr,nfreq) [nobs,nmodel]
+  type(complex_crs_matrix),dimension(2,nfreq_mt) :: dz_tipper!(2,2,nsr,nfreq) [nobs,nmodel]2026.03.03
   logical,              allocatable,dimension(:,:,:,:) :: data_avail_mt  ! 2018.10.05
-  integer(4)                               :: ii,i,nmodel,ntotr,nsr_inv, nobs_mt   ! 2017.09.04
-  integer(4)                               :: j,k,l,nsft,lsft,ncount,ndat_mt     ! 2017.09.04
-  integer(4)                               :: nmodelactive,icomp    ! 2018.10.05
-  integer(4) :: ireal,iimag,nsft1,nsft2,lsft1,lsft2
+  logical,              allocatable,dimension(:,:,:,:) :: data_avail_tipper !(2,2,nfreq,nobs_mt) 2026.03.03
+  integer(4)  :: ii,jj,i,nmodel,ntotr,ntot_tip,nsr_inv,nobs_mt! ntot_tip is added for tipper 2026.03.03
+  integer(4)  :: j,k,l,nsft,lsft,ncount,ndat_mt,ndat_tipper  ! ndat_tipper is added for tipper 2026.03.03
+  integer(4)  :: nmodelactive,icomp    ! 2018.10.05
+  integer(4)  :: ireal,iimag,nsft1,nsft2,lsft1,lsft2
   type(watch) :: t_watch  ! see m_caltime.f90 2017.12.22
   
    call watchstart(t_watch) ! see m_caltime.f90 2017.12.22
@@ -840,41 +892,46 @@ subroutine genjacobian2_MT(g_param_joint,nfreq_mt,g_mtdm,JJ_mt) ! 2018.06.25
    ndat_mt        = g_param_joint%ndat_mt     ! 2017.09.04
    nobs_mt        = g_param_joint%nobs_mt     ! 2017.09.04
    nmodelactive   = g_mtdm(1)%nmodelactive    ! 2018.06.25
-   write(*,*) "genjacobian2_mt ndat_mt",ndat_mt !           2022.01.05
-   write(*,*) "genjacobian2_mt nobs_mt",nobs_mt !           2022.01.05
+   write(*,*) "genjacobian2_mt ndat_mt",ndat_mt   ! 2022.01.05
+   write(*,*) "genjacobian2_mt nobs_mt",nobs_mt   ! 2022.01.05
    write(*,*) "genjacobian2_mt nmodelactive",nmodelactive ! 2022.01.05
+   allocate(data_avail_mt(2,4,nobs_mt,nfreq_mt))     !2018.10.05
+   data_avail_mt     = g_param_joint%data_avail_mt   ! 2017.09.04
 
-   allocate(data_avail_mt(2,4,nobs_mt,nfreq_mt)) !2018.10.05
-   data_avail_mt  = g_param_joint%data_avail_mt   ! 2017.09.04
+   if (TIP) ndat_tipper = g_param_joint%ndat_tipper ! 2026.03.03
+   if (TIP) write(*,*) "genjacobian2_mt ndat_tipper",ndat_tipper ! 2026.03.03
+   if (TIP) allocate(data_avail_tipper(2,2,nobs_mt,nfreq_mt))   ! 2026.03.03
+   if (TIP) data_avail_tipper = g_param_joint%data_avail_tipper ! 2026.03.03
+   
    do i=1,nfreq_mt  ! 2017.06.07
       dz(1,i) = g_mtdm(i)%dzxxdm ! 2017.10.05
       dz(2,i) = g_mtdm(i)%dzxydm ! 2018.10.05
       dz(3,i) = g_mtdm(i)%dzyxdm ! 2017.10.05
       dz(4,i) = g_mtdm(i)%dzyydm ! 2018.10.05
+      if (TIP) dz_tipper(1,i) = g_tipdm(i)%dtxdm ! 2026.03.03
+      if (TIP) dz_tipper(2,i) = g_tipdm(i)%dtydm ! 2026.03.03
    end do
-  
-   open(1,file="dzxxdm1Hz.dat")
-    call complexcrsout(dz(1,1),1) !m_matrix.f90
-   close(1)
-   open(1,file="dzxydm1Hz.dat")
-    call complexcrsout(dz(2,1),1) !m_matrix.f90
-   close(1)
-   open(1,file="dzyxdm1Hz.dat")
-    call complexcrsout(dz(3,1),1) !m_matrix.f90
-   close(1)
 
   !#[1]## count ntotr; total number of elements in JJ
-   ntotr = 0
-   do i = 1,nfreq_mt
-     do j = 1,nobs_mt    ! 2017.09.04
-       do icomp=1,4    ! zxx,zxy,zyx,zyy
+   ntotr = 0; ntot_tip=0 ! 2026.03.03
+   do i = 1,nfreq_mt ! frequency loop
+     do j = 1,nobs_mt  ! 2017.09.04
+       do icomp=1,4     ! zxx,zxy,zyx,zyy
            if ( data_avail_mt(1,icomp,j,i) ) then    ! 2018.10.05
              ntotr = ntotr + 2*(dz(icomp,i)%stack(j) - dz(icomp,i)%stack(j-1)) ! 2 for real and imag
            end if
         end do
+        if (TIP) then ! 2026.03.03
+         do icomp=1,2    ! tipper components, tx, ty
+           if ( data_avail_tipper(1,icomp,j,i) ) then    ! 2026.03.03
+             ntot_tip = ntot_tip + 2*(dz_tipper(icomp,i)%stack(j) - dz_tipper(icomp,i)%stack(j-1)) ! 2026.03.04
+           end if
+         end do
+        end if
       end do
     end do          ! 2018.10.05
   write(*,*) "genjacobian2_mt ntotr",ntotr
+  if(TIP) write(*,*) "genjacobian2_mt ntot_tip",ntot_tip ! 2026.03.03
 
   !#[2]## assemble J
    JJ_mt%nrow  = ndat_mt      ! 2017.09.04
@@ -882,9 +939,16 @@ subroutine genjacobian2_MT(g_param_joint,nfreq_mt,g_mtdm,JJ_mt) ! 2018.06.25
    JJ_mt%ncolm = nmodelactive ! 2018.06.25
    allocate(JJ_mt%stack(0:JJ_mt%nrow),JJ_mt%item(ntotr),JJ_mt%val(ntotr))
    JJ_mt%stack(:)=0
-   ii = 0            ! 2017.09.04
+   if (TIP) JJ_tip%nrow  = ndat_tipper  ! 2026.03.03
+   if (TIP) JJ_tip%ntot  = ntot_tip     ! 2026.03.03
+   if (TIP) JJ_tip%ncolm = nmodelactive ! 2026.03.03
+   if (TIP) allocate(JJ_tip%stack(0:JJ_tip%nrow),JJ_tip%item(ntot_tip),JJ_tip%val(ntot_tip))
+   if (TIP) JJ_tip%stack(:)=0           ! 2026.03.03
+
+   ii = 0 ; jj=0   ! 2017.09.04 ii is for JJ_mt, jj is for JJ_tip 2026.03.03
    do i =1,nfreq_mt
      do j = 1,nobs_mt   ! 2017.09.04
+      !############################################# set JJ_mt
       do icomp = 1,4 ! 2018.10.5
         if ( data_avail_mt(1,icomp,j,i) ) then  ! 2018.10.05
          ireal=ii+1
@@ -905,16 +969,55 @@ subroutine genjacobian2_MT(g_param_joint,nfreq_mt,g_mtdm,JJ_mt) ! 2018.06.25
          ii = ii + 2 ! current row index
        end if
       end do ! icomp loop 2018.10.05
+      !############################################# set JJ_tip 2026.03.03
+      if (TIP) then ! 2026.03.03
+       do icomp = 1,2 ! tipper components, tx, ty
+         if ( data_avail_tipper(1,icomp,j,i) ) then  ! 2026.03.03
+          ireal=jj+1
+          iimag=jj+2
+          ncount = dz_tipper(icomp,i)%stack(j) - dz_tipper(icomp,i)%stack(j-1)
+          JJ_tip%stack(ireal) = JJ_tip%stack(ireal-1) + ncount ! 2026.03.03
+          JJ_tip%stack(iimag) = JJ_tip%stack(iimag-1) + ncount ! 2026.03.03
+          nsft1 = JJ_tip%stack(ireal-1)      ! 2026.03.03
+          nsft2 = JJ_tip%stack(ireal)        ! 2026.03.03
+          lsft  = dz_tipper(icomp,i)%stack(j-1)    ! 2026.03.03
+          !
+          JJ_tip%item(nsft1+1:nsft1+ncount) = dz_tipper(icomp,i)%item(lsft+1:lsft+ncount) ! ireal
+          JJ_tip%item(nsft2+1:nsft2+ncount) = dz_tipper(icomp,i)%item(lsft+1:lsft+ncount)
+          !
+          JJ_tip%val( nsft1+1:nsft1+ncount) = real(dz_tipper(icomp,i)%val( lsft+1:lsft+ncount) )
+          JJ_tip%val( nsft2+1:nsft2+ncount) = imag(dz_tipper(icomp,i)%val( lsft+1:lsft+ncount) )
+
+          jj = jj + 2 ! current row index for tipper
+         end if
+       end do ! icomp loop for tipper 2026.03.03
+      end if  ! TIP check for tipper 2026.03.03
      end do  ! j     loop 2017.09.04
    end do    ! i     loop 2017.09.04
    if ( ii .ne. ndat_mt) then
     write(*,*) "GEGEGE ii",ii,"should be ndat_mt",ndat_mt,"!!!"
     stop
    end if
+   if (TIP) then ! 2026.03.03
+    if ( jj .ne. ndat_tipper) then
+     write(*,*) "GEGEGE jj",jj,"should be ndat_tipper",ndat_tipper,"!!!"
+     stop
+    end if
+   end if
   
-  open(1,file="JJ_mt_in.dat")
-  call realcrsout(JJ_mt,1)
-  close(1)
+  if (g_param_joint%ioutlevel .eq. 1 ) then  ! 2026.05.28
+      open(1,file="JJ_mt_in.dat")
+        call realcrsout(JJ_mt,1)
+      close(1)
+      write(*,*) "JJ_mt is written in JJ_mt_in.dat"
+
+      if (TIP) then ! 2026.03.03
+        open(1,file="JJ_tip_in.dat")
+        call realcrsout(JJ_tip,1)
+        close(1)
+        write(*,*) "JJ_tip is written in JJ_tip_in.dat" ! 2026.03.03
+      end if
+  end if ! 2026.05.28
 
   !#[3]## set output
    call watchstop(t_watch)  ! see m_caltime.f90 2017.12.12
@@ -925,7 +1028,7 @@ subroutine genjacobian2_MT(g_param_joint,nfreq_mt,g_mtdm,JJ_mt) ! 2018.06.25
 !######################################################### OUTJACOB
 !# modified for multiple components on 2018.10.05
 !# coded on 2018.06.25
-subroutine OUTJACOB(g_param_joint,JJ,ite,g_model,g_param,sparam)
+subroutine OUTJACOB(g_param_joint,g_data_ap,JJ,ite,g_model,g_param,sparam) ! 2022.11.01
 use param_jointinv
 use matrix
 use modelpart
@@ -933,14 +1036,15 @@ use outresp  ! for free_unit ./common/m_outresp.f90
 use param
 implicit none
 type(real_crs_matrix),    intent(in)        :: JJ
-type(param_joint),  intent(in)        :: g_param_joint
+type(param_joint),  intent(in)              :: g_param_joint
+type(data_vec_ap),        intent(in)        :: g_data_ap     ! 2022.11.01
 type(param_source),       intent(in)        :: sparam
 integer(4),               intent(in)        :: ite
 type(model),              intent(in)        :: g_model
 type(param_forward),      intent(in)        :: g_param
 character(50)                               :: head,outfile,site,sour
 character(2)                                :: num,nf
-integer(4)                                  :: i,j,k,l,m,n,ii,nh ! 2018.06.25
+integer(4)                                  :: i,j,k,l,m,n,ii ! 2018.06.25
 logical,   allocatable,dimension(:,:,:,:,:) :: data_avail        ! 2018.10.05
 integer(4)                                  :: nfreq,nobs,nsr_inv
 integer(4)                                  :: nmodel,nmodelactive
@@ -953,6 +1057,11 @@ real(8),   allocatable,dimension(:)         :: freq
 integer(4),allocatable,dimension(:)         :: srcindex
 integer(4)                                  :: icomp        ! 2018.10.05
 integer(4),            dimension(5)         :: iflag_comp   ! 2018.10.05
+real(8),   allocatable,dimension(:)         :: modelvolume ! 2022.11.01
+real(8),   allocatable,dimension(:)         :: error       ! 2022.11.01
+character(5)   :: fre     ! 2022.11.01
+character(100) :: asdfile ! 2022.11.01
+real(8) ::   er1,er2,asd  ! 2022.11.01
 
 !#[0]## set
  nfreq        = g_param_joint%nfreq           ! 2018.06.25
@@ -961,21 +1070,19 @@ integer(4),            dimension(5)         :: iflag_comp   ! 2018.10.05
  head         = g_param_joint%outputfolder    ! 2018.06.25
  nmodel       = g_model%nmodel                ! 2018.06.25
  nmodelactive = g_model%nmodelactive          ! 2018.06.25
- allocate( iactive(  nmodel)      )           ! 2018.06.25
- iactive      = g_model%iactive               ! 2018.06.25
- allocate( ptrnmodel(nmodelactive))           ! 2018.06.25
- nh           = len_trim(head)
- allocate(srcindex(nsr_inv), freq(nfreq) )    ! 2017.07.14
- srcindex = g_param_joint%srcindex            ! 2018.06.25
+ iactive      = g_model%iactive               ! iactive(nmodel)  allocate and fill
  write(num,'(i2.2)') ite                      ! 2017.07.14
- freq         = g_param%freq                  ! 2017.07.14
- allocate( data_avail(2,5,nfreq,nobs,nsr_inv))! 2018.10.05
- data_avail   = g_param_joint%data_avail      ! 2018.06.25
+ srcindex     = g_param_joint%srcindex        ! srcindex(nsr_inv) allocate and fill
+ freq         = g_param%freq                  ! freq(nfreq) allocate and fill
+ data_avail   = g_param_joint%data_avail      ! 2018.06.25 (2,5,nfreq,nobs,nsr_inv) allocate and fill
+ modelvolume  = g_model%modelvolume           ! (nmodel) 2022.11.01
+ error        = g_data_ap%error               ! (ndat)   2022.11.01
  if ( nmodelactive .ne. JJ%ncolm ) then
   write(*,*) "GEGEGE nmodelactive",nmodelactive,"JJ%ncolm",JJ%ncolm
  end if
 
 !#[1]## set ptractive
+ allocate( ptrnmodel(nmodelactive))           ! 2018.06.25
  ii=0              ! 2018.06.25
  do i=1,nmodel     ! 2018.06.25
   if ( iactive(i) .eq. 1 ) then ! 2018.06.25
@@ -991,63 +1098,84 @@ integer(4),            dimension(5)         :: iflag_comp   ! 2018.10.05
 !#[3]## generate icount
  ii = 0 ! 2018.06.25
  allocate(icount(2,5,nfreq,nobs,nsr_inv)) ! 2018.10.05
- do i=1,nfreq
- do k=1,nsr_inv
- do l=1,nobs
-  do icomp = 1,5                      ! 2018.10.05
-  do m=1,2                            ! 2018.06.25
-  if (data_avail(m,icomp,i,l,k)) then ! 2018.10.05
-   ii = ii + 1
-   icount(m,icomp,i,l,k) = ii         ! 2018.10.05
-  end if
- end do                               ! 2018.06.25
- end do                               ! 2018.10.05
- end do
- end do
- end do
+ icount = g_data_ap%idata    ! 2022.11.01
+   !do i=1,nfreq
+   !do k=1,nsr_inv
+   !do l=1,nobs
+   ! do icomp = 1,5                      ! 2018.10.05
+   ! do m=1,2                            ! 2018.06.25
+   ! if (data_avail(m,icomp,i,l,k)) then ! 2018.10.05
+   !  ii = ii + 1
+   !  icount(m,icomp,i,l,k) = ii         ! 2018.10.05
+   ! end if
+   !end do                               ! 2018.06.25
+   !end do                               ! 2018.10.05
+   !end do
+   !end do
+   !end do
+
 
 !#[4]## generate JP and output
- do icomp = 1,5                       ! 2018.10.05
+do icomp = 1,5                       ! 2018.10.05
   if (iflag_comp(icomp) .eq. 0) cycle ! 2018.10.05
 
   do k=1,nsr_inv
    do l=1,nobs
+     site    = g_param%obsname(l)
+     sour    = sparam%sourcename(srcindex(k))
+     outfile = trim(head)//"Jacob"//trim(site)//"_"//trim(sour)//"_"//comp(icomp)//num(1:2)//".dat"!2018.10.05
+     idev    = free_unit()   ! see m_outresp.f90
 
-   site    = g_param%obsname(l)
-   nsi   = len_trim(site)
-   sour    = sparam%sourcename(srcindex(k))
-   nso   = len_trim(sour)
-   outfile = head(1:nh)//"Jacob"//site(1:nsi)//"_"//sour(1:nso)//"_"//comp(icomp)//num(1:2)//".dat"!2018.10.05
-   idev    = free_unit()   ! see m_outresp.f90
+     !# gen JP
+     JP = 0.d0 ! 2018.06.25
+     do m=1,2  ! 1:amp, 2:phase
+       do i=1,nfreq
+         if ( data_avail(m,icomp,i,l,k) ) then        ! 2018.10.05
+           ii = icount(m,icomp,i,l,k)                  ! 2018.10.05
+           do j=JJ%stack(ii-1)+1,JJ%stack(ii)
+             JP(m,i,ptrnmodel(JJ%item(j))) = JJ%val(j)  ! 2018.06.25
+           end do
+         end if
+       end do
+     end do    ! 2018.06.25
 
-   !# gen JP
-   JP = 0.d0 ! 2018.06.25
-   do m=1,2  ! 1:amp, 2:phase
-   do i=1,nfreq
-    if ( data_avail(m,icomp,i,l,k) ) then        ! 2018.10.05
-     ii = icount(m,icomp,i,l,k)                  ! 2018.10.05
-     do j=JJ%stack(ii-1)+1,JJ%stack(ii)
-      JP(m,i,ptrnmodel(JJ%item(j))) = JJ%val(j)  ! 2018.06.25
-     end do
-    end if
-   end do
-   end do    ! 2018.06.25
 
-   !# output JP
-   open(idev,file=outfile)
-    write(idev,'(8g15.7)') freq(1:nfreq)
-    write(idev,*) nmodel
-    do m=1,2      ! 2018.06.25 1:amp, 2:phase
-     do n=1,nmodel
-      write(idev,'(8g15.7)') JP(m,1:nfreq,n)
-     end do
-    end do        ! 2018.06.25
-   close(idev)
+     !# output JP
+     if ( .false. ) then ! 2022.11.01
+       open(idev,file=outfile)
+         write(idev,'(8g15.7)') freq(1:nfreq)
+         write(idev,*) nmodel
+         do m=1,2      ! 2018.06.25 1:amp, 2:phase
+           do n=1,nmodel
+             write(idev,'(8g15.7)') JP(m,1:nfreq,n)
+           end do
+         end do        ! 2018.06.25
+       close(idev)
+       !
+     else               ! 2022.11.01
+       !# output ASD      2022.11.01
+       do i=1,nfreq
+         write(fre,'(i5.5)') int(freq(i))       
+         asdfile = trim(head)//"ASD"//trim(site)//"_"//trim(sour)//"_"//comp(icomp)//trim(fre)//"Hz_"//num(1:2)//".dat"
+       
+         open(idev,file=asdfile)
+           write(idev,*) nmodel
+           er1 = error(icount(1,icomp,i,l,k)) ! amp error
+           er2 = error(icount(2,icomp,i,l,k)) ! phase error
+           do n=1,nmodel
+             asd = (abs(JP(1,i,n))/er1 + abs(JP(2,i,n))/er2)/modelvolume(n) ![km]^-3
+             write(idev,*) asd
+           end do
+           !
+         close(idev)
+       end do
+      end if
 
-   end do
-  end do
- end do           ! icomp loop   2018.10.05
+    end do ! obs loop
+  end do  ! src loop
+end do   ! icomp loop   2018.10.05
 
+ write(*,*) "### OUTJACOB END !! ###" ! 2022.11.01
 return
 end
 !########################################################## getnewmodel_joint
@@ -1061,17 +1189,18 @@ end
 !#  M_ite+1 = M_ref + Cm*JT*beta
 !# 
 !#
-subroutine getnewmodel_joint(JJ_ac,JJ_mt,g_model_ref,h_model,g_data,h_data,&
-  &                          g_data_mt,h_data_mt,CM,CD_ac,CD_mt,alpha,g_param_joint)
+subroutine getnewmodel_joint(JJ_ac,JJ_mt,JJ_tip,g_model_ref,h_model,g_data,h_data,&
+  &        g_data_mt,h_data_mt,CM,CD_ac,CD_mt,CD_tip,alpha,g_param_joint) !TIP,JJ_tip,CD_tip are added for tipper 2026.03.03
   use modelpart
   use matrix
   use param_jointinv ! 2017.06.09
   use caltime ! 2017.12.22
   implicit none
-  type(param_joint),    intent(in)  :: g_param_joint
+  type(param_joint),    intent(in)    :: g_param_joint
   real(8),              intent(in)    :: alpha
   type(real_crs_matrix),intent(in)    :: JJ_ac       ! [ndat,nmodel]          2022.01.05
   type(real_crs_matrix),intent(in)    :: JJ_mt       ! [ndat_mt,nmodel]       2022.01.05
+  type(real_crs_matrix),intent(in)    :: JJ_tip      ! [ndat_tipper,nmodel]   2026.03.03
   type(model),          intent(in)    :: g_model_ref ! reference model
   type(model),          intent(inout) :: h_model     ! old -> new
   type(data_vec_ap),    intent(in)    :: g_data      ! observed
@@ -1081,22 +1210,24 @@ subroutine getnewmodel_joint(JJ_ac,JJ_mt,g_model_ref,h_model,g_data,h_data,&
   type(real_crs_matrix),intent(in)    :: CM          ! model covariance matrix
   type(real_crs_matrix),intent(in)    :: CD_ac       ! data covariance matrix 2022.01.05
   type(real_crs_matrix),intent(in)    :: CD_mt       ! data covariance matrix 2022.01.05
+  type(real_crs_matrix),intent(in)    :: CD_tip      ! data covariance matrix 2026.03.03
   type(real_crs_matrix)               :: C,JCMJT,ACD,crsout      ! 2018.01.23
   type(real_crs_matrix)               :: CMJT, JT    ! 2018.01.23
-  type(real_crs_matrix)               :: JJ,CD       !                        2022.01.05
+  type(real_crs_matrix)               :: JJ,CD, JJ_tmp !  JJ_tmp is added for tipper 2026.03.03
   real(8),allocatable,dimension(:)    :: X, dobs, dcal,JM,beta   ! [ndat]
   real(8),allocatable,dimension(:)    :: dobs_mt, dcal_mt        ! [ndat_mt]  2022.01.05
   real(8),allocatable,dimension(:)    :: dobs_ac, dcal_ac        ! [ndat_ac]  2022.01.05
+  real(8),allocatable,dimension(:)    :: dobs_tipper,dcal_tipper ! [ndat_tipper] 2026.03.03
   real(8),allocatable,dimension(:)    :: model1,model_ref,dmodel ! [nmodel]
   integer(4)                          :: ndat,nmodel,i,ii ! 2018.06.25
-  integer(4)                          :: ndat_mt,ndat_ac !                    2022.01.05
+  integer(4)                          :: ndat_mt,ndat_ac,ndat_tipper !ndat_tipper is added for tipper 2026.03.03
   integer(4)                          :: nmodelactive ! 2018.06.25
   integer(4),allocatable,dimension(:) :: iactive      ! 2018.06.25
   integer(4)                          :: iboundflag,ijoint,ioutlevel ! 2022.10.14
   integer(4)                          :: icheck = 1
   type(model)                         :: ki,kiref
   type(model)                         :: m0,m_ref
-  logical                             :: MT, ACT ! 2022.10.14
+  logical                             :: MT, ACT,TIP ! 2023.12.23
   type(watch) :: t_watch ! 2017.12.22
   type(watch) :: t_watch1 ! 2018.01.23
   
@@ -1105,11 +1236,12 @@ subroutine getnewmodel_joint(JJ_ac,JJ_mt,g_model_ref,h_model,g_data,h_data,&
   
   !#[0]## set
     call watchstart(t_watch1)
-    ijoint       = g_param_joint%ijoint     ! 2022.10.14 1:ACTIVE,2:MT,3:Joint
-    call setnec(ijoint,ACT,MT)                     ! 2022.10.14 see m_param_joint.f90
+    ijoint = g_param_joint%ijoint ! 2026.03.03
+    call setnec(g_param_joint,ACT,MT,TIP) ! set ACT,MT,TIP 2026.03.03
     ioutlevel    = g_param_joint%ioutlevel  ! 2022.10.14
     ndat_ac      = g_data%ndat              !            2022.01.05
     ndat_mt      = g_data_mt%ndat_mt        !            2022.01.05
+    ndat_tipper  = g_data_mt%ndat_tipper    !            2026.03.03
     nmodel       = g_model_ref%nmodel
     nmodelactive = g_model_ref%nmodelactive ! 2018.06.25
     allocate( iactive(nmodel) )             ! 2018.06.25
@@ -1120,6 +1252,9 @@ subroutine getnewmodel_joint(JJ_ac,JJ_mt,g_model_ref,h_model,g_data,h_data,&
     dcal_ac      = h_data%dvec
     dobs_mt      = g_data_mt%dvec_mt        !            2022.01.05
     dcal_mt      = h_data_mt%dvec_mt        !            2022.01.05
+    if (TIP) allocate(dobs_tipper(ndat_tipper),dcal_tipper(ndat_tipper)) ! 2026.03.03
+    if (TIP) dobs_tipper  = g_data_mt%dvec_tipper    !            2026.03.03
+    if (TIP) dcal_tipper  = h_data_mt%dvec_tipper    !            2026.03.03
     allocate( model1(   nmodelactive) )     ! 2018.06.25
     allocate( model_ref(nmodelactive) )     ! 2018.06.25
     allocate( dmodel(   nmodelactive) )     ! 2018.06.25
@@ -1145,7 +1280,11 @@ subroutine getnewmodel_joint(JJ_ac,JJ_mt,g_model_ref,h_model,g_data,h_data,&
     if (ijoint == 1 ) JJ = JJ_ac ! 2022.10.14
     if (ijoint == 2 ) JJ = JJ_mt ! 2022.10.14
     if (ijoint == 3 ) call  vertical_combine_real_crs(JJ_ac,JJ_mt,JJ) ! Joint       2022.10.14
-
+    if (TIP) then
+      JJ_tmp = JJ
+      call deallocate_real_crsmat(JJ) ! 2026.03.03
+      call  vertical_combine_real_crs(JJ_tmp,JJ_tip,JJ)  ! Tipper      2026.03.03
+    end if
     write(*,*) "combine JJ end"
     if (ioutlevel == 1 .and. .false.) then ! 2022.10.14
      open(1,file="JJ.dat")
@@ -1154,36 +1293,44 @@ subroutine getnewmodel_joint(JJ_ac,JJ_mt,g_model_ref,h_model,g_data,h_data,&
     end if
 
     ! As for combining CD, the following works for all ijoint = 1,2,3 2022.10.14
-    CD%ntot  = CD_ac%ntot  + CD_mt%ntot 
-    CD%ncolm = CD_ac%ncolm + CD_mt%ncolm 
-    CD%nrow  = CD_ac%nrow  + CD_mt%nrow 
-    ndat = ndat_ac + ndat_mt
+    CD%ntot  = CD_ac%ntot  + CD_mt%ntot  + CD_tip%ntot  ! 2026.03.03
+    CD%ncolm = CD_ac%ncolm + CD_mt%ncolm + CD_tip%ncolm ! 2026.03.03
+    CD%nrow  = CD_ac%nrow  + CD_mt%nrow  + CD_tip%nrow  ! 2026.03.03
+    ndat = ndat_ac + ndat_mt + ndat_tipper ! ndat_tipper is added 2026.03.03
 
     allocate(CD%stack(0:ndat),CD%item(ndat),CD%val(ndat))
     CD%stack(0)=0
     do i=1,ndat
       CD%stack(i)= i
       CD%item(i) = i
-      if ( i .le. ndat_ac)      CD%val(i) = CD_ac%val(i)
-      if ( i .gt. ndat_ac)      CD%val(i) = CD_mt%val(i-ndat_ac)
     end do
-      write(*,*) "combine CD end"
+    if (ACT) CD%val(1:ndat_ac)                  = CD_ac%val(1:ndat_ac)      ! 2026.03.03
+    if (MT)  CD%val(ndat_ac+1:ndat_ac+ndat_mt)  = CD_mt%val(1:ndat_mt)      ! 2026.03.03
+    if (TIP) CD%val(ndat_ac + ndat_mt+1 : ndat) = CD_tip%val(1:ndat_tipper) ! 2026.03.03
+    write(*,*) "combine CD end"
 
   !#[2]## combine data vector
-    ndat = ndat_ac + ndat_mt
+    ndat = ndat_ac + ndat_mt + ndat_tipper ! 2026.03.03
+    write(*,*) "ndat_ac",ndat_ac         ! 2026.03.05
+    write(*,*) "ndat_mt",ndat_mt         ! 2026.03.05
+    write(*,*) "ndat_tipper",ndat_tipper ! 2026.03.05
+    write(*,*) "total ndat",ndat         ! 2026.03.05
     allocate( dobs(ndat),dcal(ndat))         !           2022.01.05
     allocate( X(ndat),JM(ndat) )             !           2022.01.05
-    if ( ijoint == 1) then
-     dobs = dobs_ac
-     dcal = dcal_ac
-    else if (ijoint == 2) then
-     dobs = dobs_mt
-     dcal = dcal_mt
-    else if (ijoint == 3) then
-    dobs(        1:ndat_ac) = dobs_ac        !           2022.01.05
-    dobs(ndat_ac+1:ndat   ) = dobs_mt        !           2022.01.05
-    dcal(        1:ndat_ac) = dcal_ac        !           2022.01.05
-    dcal(ndat_ac+1:ndat   ) = dcal_mt        !           2022.01.05
+    if ( ACT ) then ! 2026.03.05
+     dobs(1:ndat_ac) = dobs_ac               ! 2026.03.05
+     dcal(1:ndat_ac) = dcal_ac               ! 2026.03.05
+     write(*,*) "combine ACT data vector end" ! 2026.03.05
+    end if
+    if ( MT ) then
+     dobs(ndat_ac+1:ndat_ac+ndat_mt) = dobs_mt  ! 2026.03.05
+     dcal(ndat_ac+1:ndat_ac+ndat_mt) = dcal_mt  ! 2026.03.05
+     write(*,*) "combine MT data vector end"    ! 2026.03.05
+    end if
+    if (MT .and. TIP) then
+     dobs(ndat_ac + ndat_mt+1 : ndat) = dobs_tipper ! 2026.03.03
+     dcal(ndat_ac + ndat_mt+1 : ndat) = dcal_tipper ! 2026.03.03
+     write(*,*) "combine data vector for tipper end" ! 2026.03.05
     end if
     write(*,*) "combine data vector end"
     
@@ -1237,12 +1384,14 @@ subroutine getnewmodel_joint(JJ_ac,JJ_mt,g_model_ref,h_model,g_data,h_data,&
     call watchstop(t_watch1)
   if (icheck .eq. 1) write(*,10) " ### GETNEWMODEL [2-3] END!! Time =",t_watch1%time," [min]"!2020.09.18
 
-  open(1,file="cd.dat")
-  call realcrsout(CD,1)
-  close(1)
-  open(1,file="jcmjt.dat")
-  call realcrsout(JCMJT,1)
-  close(1)
+  if ( .false.) then ! 2026.05.28
+    open(1,file="cd.dat")
+    call realcrsout(CD,1)
+    close(1)
+    open(1,file="jcmjt.dat")
+    call realcrsout(JCMJT,1)
+    close(1)
+  end if ! 2026.05.28
 
   !#[2-4]# cal C = JCMJT + alpha*CM
     call watchstart(t_watch1)
@@ -1252,9 +1401,11 @@ subroutine getnewmodel_joint(JJ_ac,JJ_mt,g_model_ref,h_model,g_data,h_data,&
     call watchstop(t_watch1)
   if (icheck .eq. 1) write(*,10) " ### GETNEWMODEL [2-4] END!! Time =",t_watch1%time," [min]"!2020.09.18
 
-  open(1,file="c.dat")
-  call realcrsout(c,1)
-  close(1)
+  if ( .false. ) then ! 2026.05.28
+    open(1,file="c.dat")
+    call realcrsout(c,1)
+    close(1)
+  end if ! 2026.05.28
   
   !#[3]## gen X
   !#   X  = d_obs - d(M) + J(M - M_ref)
