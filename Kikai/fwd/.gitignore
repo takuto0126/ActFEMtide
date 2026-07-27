@@ -6,4 +6,6 @@ tmp.ctl
 pull.sh
 *.grd
 result/*
-! result/.gitkeep
+data_inv/*
+!result/.gitkeep
+!data_inv/.gitkeep
