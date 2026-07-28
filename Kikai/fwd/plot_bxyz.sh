@@ -13,19 +13,19 @@ gmt surface $topo -R$wesn -I1/1 -Gtopo.grd
 gmt makecpt -Cjet -T-1/5/0.01 
 
 #[bx] East
-gmt basemap -R$wesn -JX10/10 -Bxa50+l"Easting[km]" -Bya50+l"Northing[km]" -BWeSn+t"|B| east [nT]" -Y16
+gmt basemap -R$wesn -JX10/10 -Bxa50+l"Easting[km]" -Bya50+l"Northing[km]" -BWeSn+t"|B_east| [nT]" -Y16
 awk '{print($1,$2,$4)}' $infile | gmt surface -R$wesn -I$di -Ggrd.grd -T0
 gmt grdimage  grd.grd -C -R$wesn
 gmt grdcontour topo.grd -C50 -L-40/40 -W1
 
 #[by] North
-gmt basemap -R$wesn -JX10/10 -Bxa50+l"Easting[km]" -Bya50 -BWeSn+t"|B| north [nT]" -X11
+gmt basemap -R$wesn -JX10/10 -Bxa50+l"Easting[km]" -Bya50 -BWeSn+t"|B north| [nT]" -X11
 awk '{print($1,$2,$6)}' $infile | gmt surface -R$wesn -I$di -Ggrd.grd -T0
 gmt grdimage  grd.grd -C -R$wesn
 gmt grdcontour topo.grd -C50 -L-40/40 -W1
 
 #[bz] UP
-gmt basemap -R$wesn -JX10/10 -Bxa50+l"Easting[km]" -Bya50 -BWeSn+t"|B| up [nT]" -X11
+gmt basemap -R$wesn -JX10/10 -Bxa50+l"Easting[km]" -Bya50 -BWeSn+t"|B up| [nT]" -X11
 awk '{print($1,$2,$8)}' $infile | gmt surface -R$wesn -I$di -Ggrd.grd -T0
 gmt grdimage  grd.grd -C -R$wesn
 gmt grdcontour topo.grd -C50 -L-40/40 -W1
