@@ -1,36 +1,46 @@
 #!/bin/bash
 
 #ifort -g generr_mt_imp.f90  -o generr.exe
-gfortran generr_mt_imp.f90  -o ./generr.exe
+gfortran src/generr_mt_imp.f90  -o ./src/generr.exe
 
 cat <<EOF > err.ctl
         10     20->|header
-# of obs files     |9
+# of obs files     |14
 # of frequencies   |5
 input folder       |./result/
-output folder      |./mt_err/
-in file1 ***.dat   |MT1_MT_imp.dat
-errfile1           |MT1_MT_imp_err.dat
-in file2 ***.dat   |MT2_MT_imp.dat
-errfile2           |MT2_MT_imp_err.dat
-in file3 ***.dat   |MT3_MT_imp.dat
-errfile3           |MT3_MT_imp_err.dat
-in file4 ***.dat   |MT4_MT_imp.dat
-errfile4           |MT4_MT_imp_err.dat
-in file5 ***.dat   |MT5_MT_imp.dat
-errfile5           |MT5_MT_imp_err.dat
-in file6 ***.dat   |MT6_MT_imp.dat
-errfile6           |MT6_MT_imp_err.dat
-in file7 ***.dat   |MT7_MT_imp.dat
-errfile7           |MT7_MT_imp_err.dat
-in file8 ***.dat   |MT8_MT_imp.dat
-errfile8           |MT8_MT_imp_err.dat
-in file9 ***.dat   |MT9_MT_imp.dat
-errfile9           |MT9_MT_imp_err.dat
-ratio              !0.01
+output folder      |./data_inv/
+infile1 ***.dat    |P5_MT_imp.dat
+errfile1           |P5_MT_imp_err.dat
+infile2 ***.dat    |P6_MT_imp.dat
+errfile2           |P6_MT_imp_err.dat
+infile3 ***.dat    |P7_MT_imp.dat
+errfile3           |P7_MT_imp_err.dat
+infile4 ***.dat    |P8_MT_imp.dat
+errfile4           |P8_MT_imp_err.dat
+infile5 ***.dat    |P9_MT_imp.dat
+errfile5           |P9_MT_imp_err.dat
+infile6 ***.dat    |P10_MT_imp.dat
+errfile6           |P10_MT_imp_err.dat
+infile7 ***.dat    |P11_MT_imp.dat
+errfile7           |P11_MT_imp_err.dat
+infile8 ***.dat    |P12_MT_imp.dat
+errfile8           |P12_MT_imp_err.dat
+infile9 ***.dat    |P13_MT_imp.dat
+errfile9           |P13_MT_imp_err.dat
+infile10 ***.dat   |P14_MT_imp.dat
+errfile10          |P14_MT_imp_err.dat
+infile11 ***.dat   |P15_MT_imp.dat
+errfile11          |P15_MT_imp_err.dat
+infile12 ***.dat   |P16_MT_imp.dat
+errfile12          |P16_MT_imp_err.dat
+infile13 ***.dat   |P17_MT_imp.dat
+errfile13          |P17_MT_imp_err.dat
+infile14 ***.dat   |P18_MT_imp.dat
+errfile14          |P18_MT_imp_err.dat
+ratio              !0.03
 EOF
 
-./generr.exe < err.ctl
+./src/generr.exe < err.ctl
 
 rm err.ctl
 
