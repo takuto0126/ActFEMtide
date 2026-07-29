@@ -29,11 +29,11 @@ do j=2,5 ! 5 faces except top surface
  iele_tet = g_surface(j)%ifacetri_to_tet(i)
 
  if (      n4flag(iele_tet,1) .eq. 1 ) then ! in the air
-    g_surface(j)%cond(i) = g_cond%sigma_air
- else if ( n4flag(iele_tet,1) .eq. 2 ) then
-    g_surface(j)%cond(i) = 3.31   
- else if ( n4flag(iele_tet,1) .eq. 3 ) then ! under ground
-  if ( g_cond%condflag .eq. 0)g_surface(j)%cond(i)=g_cond%sigma_land(1) ! 2017.09.29
+  g_surface(j)%cond(i) = g_cond%sigma_air
+ else if ( n4flag(iele_tet,1) .eq. 2 ) then ! for ActFEMtide
+    g_surface(j)%cond(i) = 3.31             ! for ActFEMtide
+ else if ( n4flag(iele_tet,1) .eq. 3 ) then ! under ground  ! for ActFEMtide
+ if ( g_cond%condflag .eq. 0)g_surface(j)%cond(i)=g_cond%sigma_land(1) ! 2017.09.29
   if ( g_cond%condflag .eq. 1)g_surface(j)%cond(i)=g_cond%sigma(iele_tet - g_cond%nphys1)
  else
   write(*,*) "GEGEGE n4flag=",n4flag(iele_tet,1)
