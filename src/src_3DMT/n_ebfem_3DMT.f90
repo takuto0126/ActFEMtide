@@ -422,7 +422,7 @@ n4flag = g_mesh%n4flag
 !#[1]## calculate nphys1 and nphys2
 nphys2 = 0
 do i=1,ntet
-if ( n4flag(i,1) .ge. 2 ) nphys2 = nphys2 + 1 ! count land elements 2017.09.29
+if ( n4flag(i,1) .ge. 3 ) nphys2 = nphys2 + 1 ! Modified on 2026.07.29 to adjust TMTGEM mesh
 end do
 
 if (g_cond%condflag .eq. 1 ) then ! check when cond file is given

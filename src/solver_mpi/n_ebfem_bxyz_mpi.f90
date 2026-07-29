@@ -62,7 +62,7 @@ integer(4)                                  :: ixyflag  ! 2017.10.11
    CALL READMESH_TOTAL(g_mesh,g_param%g_meshfile) ! 3-D whole file
    CALL READMESH_TOTAL(h_mesh,g_param%z_meshfile) ! triangle mesh with topo
    CALL READMESH_TOTAL(ocean_mesh,g_param%ocean_meshfile) ! 2024.03.18
-   g_param%nodes = ocean_mesh%node                ! 2024.03.18
+   g_param%nodes = ocean_mesh%node                ! nodes is necessary to read fxyz and vxyz files 2024.03.18
    call killmesh(ocean_mesh)                      ! 2024.03.18
 
    !#[1-2]# read ki_mesh and ki23dptr             ! 2021.07.27
