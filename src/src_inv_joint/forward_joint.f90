@@ -386,6 +386,7 @@ SUBROUTINE SET_BC_3DJoint(A,nline,nsr,rf,rf_mt,dvalue,dvalue_mt,dirichlet,ip)
   use  param_jointinv  !2021.12 25 2017.08.31
   use  constants,      only:pi,dmu,epsilon  ! see m_constants.f90, 2018.06.25
   use  m_param_ana,    only:cond,istructure ! see m_param_ana.f90
+  use  readFvxyz       ! src_tide/m_readfvxyz.f90 2026.07.30
   implicit none
   type(mesh),             intent(in)    :: h_mesh
   type(line_info),        intent(in)    :: l_line
