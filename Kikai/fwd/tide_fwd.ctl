@@ -36,7 +36,7 @@ A_src     [km]     !0.005
 # of observatory   !14
 lonlat(1),xyz (2)  !0
 UTM ZONE           |52N
-lonlatorigin       !130.500000     30.500000
+lonlatorigin       !130.000000     30.500000
 12  Name           !P5
 12  xyz            !130.3583       30.6500      -0.001
 11  Name           !P6

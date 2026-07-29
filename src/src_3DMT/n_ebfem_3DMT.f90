@@ -40,7 +40,7 @@ character(1) ::num
 
 !#[1]## Mesh READ
  CALL READMESH_TOTAL(g_mesh,g_param_mt%g_meshfile) ! 3D mesh
- CALL READMESH_TOTAL(h_mesh,g_param_mt%z_meshfile) ! topography file
+ CALL READMESH_TOTAL(h_mesh,g_param_mt%z_meshfile) ! topography 2-D mesh
  CALL PREPZOBSMT(h_mesh,g_param_mt) ! 2026.07.29 modification for ActFEMtide
  CALL GENXYZMINMAX_MT(g_mesh,g_param_mt) ! generate xyzminmax 2021.12.15
   if (g_cond%condflag .eq. 1) then !"1" : conductivity file is given
@@ -139,6 +139,7 @@ end do ! end frequency loop
  call OUTOBSRESPMT(g_param_mt,resp_mt,nfreq)
  call OUTOBSRESP_TIP(g_param_mt,resp_tip,nfreq) ! 2025.04.21
 
+write(*,*) "### n_ebfem_3DMT END!! ###"
 end program ebfem_3DMT
 
 !#############################################
@@ -332,7 +333,6 @@ subroutine calresptip(resp5,resp_tip,omega,ip) ! 2023.12.23
    end do
   end do
   
-  write(*,*)
   !# calculate tipper
   do j=1,nobs
    a = be5_ex(1,j) ! Bx_ex
@@ -422,7 +422,7 @@ n4flag = g_mesh%n4flag
 !#[1]## calculate nphys1 and nphys2
 nphys2 = 0
 do i=1,ntet
-if ( n4flag(i,1) .ge. 3 ) nphys2 = nphys2 + 1 ! Modified on 2026.07.29 to adjust TMTGEM mesh
+if ( n4flag(i,2) .ge. 3 ) nphys2 = nphys2 + 1 ! Modified on 2026.07.29 to adjust TMTGEM mesh
 end do
 
 if (g_cond%condflag .eq. 1 ) then ! check when cond file is given
@@ -446,11 +446,11 @@ allocate( g_cond%sigma(nphys2) )
 allocate( g_cond%rho(  nphys2) )
 allocate( g_cond%index(nphys2) )
 do i=1,nphys2                          ! 2017.09.29
-if ( n4flag(nphys1+i,1) .le. 1 ) then ! 2017.09.29
-write(*,*) "GEGEGE! i=",i,"n4flag(nphys1+i,1)=",n4flag(nphys1+i,1),"nphys1=",nphys1
+if ( n4flag(nphys1+i,2) .le. 2 ) then ! 1:air,2:ocean, 3:land
+write(*,*) "GEGEGE! i=",i,"n4flag(nphys1+i,2)=",n4flag(nphys1+i,2),"nphys1=",nphys1
 stop                                 ! 2017.09.29
 end if                                ! 2017.09.29
-g_cond%sigma(i) = g_cond%sigma_land(n4flag(nphys1+i,1)-1) ! 2017.09.29
+g_cond%sigma(i) = g_cond%sigma_land(n4flag(nphys1+i,2)-1) ! 2017.09.29
 g_cond%rho(i)   = 1.d0/g_cond%sigma(i)
 end do
 end if
@@ -664,7 +664,7 @@ real(8),allocatable,dimension(:,:)    :: xs1,xs2 ! 2017.07.18
 real(8)    :: xyzminmax(6)                       ! 2017.07.18
 
 !#[0]## cal xyzminmax of h_mesh
-!  CALL GENXYZMINMAX(h_mesh,g_param)  ! commented out  2017.10.12
+CALL GENXYZMINMAX_MT(h_mesh,g_param_MT)  ! commented out  2017.10.12
 
 !#[1]## set
 allocate(xyz(3,h_mesh%node),n3k(h_mesh%ntri,3))
@@ -679,7 +679,7 @@ xyzminmax = g_param_mt%xyzminmax
 
 
 !#[2]## cal z for nobsr
-nx=1000;ny=1000
+nx=300;ny=300
 CALL allocate_2Dgrid_list(nx,ny,ntri,glist)   ! see m_mesh_type.f90
 write(*,*) "before gen2Dgridforlist in PREPZSRCOBS"
 CALL gen2Dgridforlist(xyzminmax,glist) ! see m_mesh_type.f90

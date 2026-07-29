@@ -2,7 +2,7 @@
 
 FC=ifx
 #OPT=-i-dynamic
-VPATH = ../common ../solver  ../src_2D/ ../src_inv/
+VPATH = ../common ../solver  ../src_2D/
 OPT0= -O3 -xAVX -mkl=parallel
 OPT0= -O -traceback -g -qmkl=parallel
 
@@ -24,7 +24,7 @@ $(target1) : $(objs1)
 	$(FC) -c $< -o $@
 
 clean:
-	rm -f *.o    ../solver/*.o    ../src_2D/*.o   ../src_inv/*.o
-	rm -f *.mod  ../solver/*.mod  ../src_2D/*.mod ../src_inv/*.mod
-	rm -f *.exe  ../solver/*.exe  ../src_2D/*.exe ../src_inv/*.exe
+	rm -f *.o    ../solver/*.o    ../src_2D/*.o   
+	rm -f *.mod  ../solver/*.mod  ../src_2D/*.mod 
+	rm -f *.exe  ../solver/*.exe  ../src_2D/*.exe 
 

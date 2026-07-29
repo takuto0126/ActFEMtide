@@ -71,7 +71,7 @@ ALLOCATE(x(n,nrhs)) ! 2017.07.11
 !write(*,'(a,3i7,2e15.7)') "I,INU,IAU,A",i,A%INU(i),A%IAU(i),A%AU(i)
 !end do
 !deallocate (A%IAU, A%IAL, A%INU, A%INL, A%AU, A%AL, A%D)
-write(*,*) "solvePARDISO start!!"
+!write(*,*) "solvePARDISO start!!"
 
 !..
 !.. Set up PARDISO control parameter

@@ -13,7 +13,7 @@
 ## iflag_map = 2 (UTM) : lon lat topo + Universal Transvers Mercatol (UTM) projection
 ##                 two additional line: UTM zone like 52S (a3) and lonlat origin (2f15..7)
 iflag_map          !1
-lonlatorigin       !131.084782     32.884882
+lonlatorigin       !130.000000     30.500000
 # of topofile      !1
 topofile           !../mesh/topo.dat
 lon lat shift      !0.0         0.0
@@ -24,23 +24,23 @@ angle              !0.0
 output folder      !./result/
 header2d  (a50)    !nakadake2d
 header3d  (a50)    !nakadake3d
-# of frequency     !3
+# of frequency     !5
 Frequency [Hz]     !0.001d0
 Frequency [Hz]     |0.03d0
 Frequency [Hz]     !0.01d0
 Frequency [Hz]     !0.03d0
 Frequency [Hz]     !0.1d0
-west bound         !-1.7
-east bound         !1.7
-south bound        !-1.5
-north bound        !1.5
-lenout [km]        !25.0
+west bound  [deg]  | 128.0
+east bound  [deg]  | 132.0
+south bound [deg]  | 29.0
+north bound [deg]  | 32.0
+lenout  [km]       |500.0
 upz in [km]  (>0)  !1.3
 downz in [km](<0)  !-1.1
 zmax   [km]        !50.0
 zmin   [km]        !-50.0
-sizein [km]        !0.10
-sizebo [km]        !2.0
+sizein  [km]       |50.0
+sizeout [km]       |100.0
 sigma_obs [km]     !0.4
 A_obs     [km]     !0.01
 dlen_source [km]   !0.1

@@ -247,7 +247,7 @@ do iele=1, h_mesh%ntet  ! start elemetn loop
 
   !# [4] ## Second term from i * omega * mu * sigma * int{ sigma w cdot w }dv {Bsl}
   !# [4-1] ## assemble coefficient for i * omega*
-  j = h_mesh%n4flag(iele,1)                 ! 2017.09.29
+  j = h_mesh%n4flag(iele,2)                 ! 2026.07.29 
   if ( j .eq. 1 ) sigma=g_cond%sigma_air    ! 2017.09.29
   if ( j .eq. 2 ) sigma=3.33                ! 2026.07.29 modified for ActFEMtide same format with solver_mpi/forward_bxyz.f90
   if ( j .ge. 3 ) then                      ! 2026.07.30 modified for ActFEMtide
@@ -255,8 +255,8 @@ do iele=1, h_mesh%ntet  ! start elemetn loop
    if ( g_cond%condflag .eq. 1  ) then ! condflag = 1 -> file conductivity
     sigma = g_cond%sigma(iele - g_cond%nphys1) ! sigma store only nphys=2 element
    end if
-  else if ( h_mesh%n4flag(iele,1) .ge. 4 ) then ! Modified for ActFEMtide 2026.07.29
-    write(*,*) "GEGEGE h_mesh%n4flag(iele,1) = ",h_mesh%n4flag(iele,1)
+  else if ( h_mesh%n4flag(iele,2) .ge. 4 ) then ! Modified for ActFEMtide 2026.07.29
+    write(*,*) "GEGEGE h_mesh%n4flag(iele,2) = ",h_mesh%n4flag(iele,2)
     stop
   end if
 

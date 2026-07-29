@@ -1,4 +1,5 @@
 module param
+use constants ! 2026.07.30
 implicit none
 
 type param_forward
@@ -108,7 +109,7 @@ end type
 ! character(70) :: bellgeofile
 ! integer(4) :: ilonlatflag ! 1 for lonlat, 2 for xy [km]
 ! real(8)  :: lon_bell, lat_bell
-! real(8)  :: radius![km]
+! real(8)  :: planetrad![km]
 ! real(8)  :: width ![km]
 ! real(8)  :: ztop  ! < 0 [km] how deep is the top of bell
 ! real(8)  :: zbot  ! < 0 [km] how deep is the bottom of bell
@@ -151,11 +152,6 @@ integer(4)                  :: i,j,nobs,input=2,nsource
 character(70)               :: site
 real(8)                     :: lonorigin,latorigin,a
 character(100)              :: paramfile
-!integer(4),    parameter    :: n = 1000 ! 2020.09.28
-!character(200),dimension(n) :: lines    ! 2020.09.28
-real(8) :: pi,d2r,radius
-pi=4.*atan(1.d0)
-d2r=pi/180.
 !#
 write(*,*) ""
 write(*,*) "<Please input the forward parameter file>" ! 2020.09.28
@@ -305,12 +301,12 @@ write(*,*) "" !2021.09.29
    site=c_param%obsname(i) ! 2021.09.02
 
    ! lonlatalt
-   radius = 6371.2 ! [km]
+   !planetrad = 6371.2 ! [km] planetrad is included in m_constants.f90 2026.07.30
    if ( c_param%lonlatflag .eq. 0 ) then !2024.02.08
 
      read(input,*) (c_param%lonlataltobs(j,i),j=1,3)
-     c_param%xyzobs(1,i) = (c_param%lonlataltobs(1,i) - lonorigin)*d2r*radius*cos(latorigin*d2r)
-     c_param%xyzobs(2,i) = (c_param%lonlataltobs(2,i)-latorigin)*d2r*radius
+     c_param%xyzobs(1,i) = (c_param%lonlataltobs(1,i) - lonorigin)*d2r*planetrad*cos(latorigin*d2r)
+     c_param%xyzobs(2,i) = (c_param%lonlataltobs(2,i)-latorigin)*d2r*planetrad
      c_param%xyzobs(3,i) = c_param%lonlataltobs(3,i)
      write(*,'(1x,a,2f15.7,a)') "lon lat >",c_param%xyzobs(1:2,i)," [km]" ! 2024.02.08
 
