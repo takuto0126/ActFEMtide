@@ -68,7 +68,7 @@ iflag_comp = g_param_joint%iflag_comp ! 2018.10.05
 CALL INITIALIZE_JOINT(ACT,MT,A,rf,rf_mt,bs,bs_mt,nline,nsr) ! nsr is added 2021.12.29
 
 !#[4-2]## Generate Matrix for CRS format: set A and rf (ACTIVE rhs vector)
-CALL GENMAT(h_mesh,l_line,A,rf,omega,sparam,g_param,g_cond,g_param_joint) ! 2017.08.31
+CALL GENMAT(h_mesh,l_line,A,rf,omega,sparam,g_param,g_cond,g_param_joint) ! 2026.07.30
 
 !#[4-3]## Copy upper triangle to lower driangle
 CALL COPY_UL_ICCG12(A,ip) ! 2021.10.04
@@ -372,168 +372,216 @@ SUBROUTINE SET_BC_3DJoint(A,nline,nsr,rf,rf_mt,dvalue,dvalue_mt,dirichlet,ip)
   END
   !
 !#################################################################### GENMAT8
-! modified on 2017.08.31 for amp phase multiple sources
-! Coded on March 4, 2016
-! replace integration by tetrai_table by analytical integration
-subroutine GENMAT(h_mesh,l_line,A,rf,omega,sparam,g_param,g_cond,g_param_joint)
-use  outerinnerproduct
-use  iccg_var_takuto ! rf is not included, see m_iccg_var_takuto.f90
-use  mesh_type       ! see m_mesh_type.f90
-use  line_type       ! see m_line_type.f90
-use  fem_util        ! for volume, intv, (see m_fem_utiil.f90 )
-use  fem_edge_util   ! see fem_edge_util.f90
-use  param
-use  param_jointinv  !2021.12 25 2017.08.31
-use  constants,      only:pi,dmu,epsilon  ! see m_constants.f90, 2018.06.25
-use  m_param_ana,    only:cond,istructure ! see m_param_ana.f90
-implicit none
-type(mesh),             intent(in)    :: h_mesh
-type(line_info),        intent(in)    :: l_line
-type(param_forward),    intent(in)    :: g_param
-type(param_joint),intent(in)    :: g_param_joint ! 2017.08.31
-type(param_source),     intent(in)    :: sparam
-type(param_cond),       intent(in)    :: g_cond
-type(global_matrix),    intent(inout) :: A
-real(8),                intent(in)    :: omega
-complex(8),             intent(out)   :: rf(l_line%nline,g_param_joint%nsr_inv)!20170713
-integer(4),allocatable,dimension(:)   :: srcindex                  ! 2017.07.13
-integer(4)                            :: nsr_inv                   ! 2017.07.13
-real(8)                               :: elm_xyz(3,4),xx(3,6), gn(3,4)
-real(8)                               :: w(6,3), S(6,6), v,  yy
-complex(8)                            :: sigma                     ! 2018.06.25
-complex(8)                            :: iunit=(0.d0, 1.d0), rhs1
-complex(8),           dimension(6,6)  :: elm_k, S1
-integer(4),           dimension(6)    :: table_dof_elm, idirection
-integer(4) :: iele, i, j, k, l, m, n, ii, jj, id_group
-!---------------  scales ------------------------------------------------------
-real(8), parameter                    :: L0=1.d+3  ! [m]  scale length
-real(8)                               :: AA, a1(4),a2(4), sigma_bell
-complex(8)                            :: BB
-complex(8)                            :: b3(3,4),bl(6)
-logical                               :: itrue
-real(8),allocatable,dimension(:,:)    :: x3s,x3e ! 2017.07.13
-real(8)            ,dimension(3)      :: PQ,unitPQ,x3p1,x3p2,localPQ,x1,x2,x3
+  ! modified on 2017.08.31 for amp phase multiple sources
+  ! Coded on March 4, 2016
+  ! replace integration by tetrai_table by analytical integration
+  subroutine GENMAT(h_mesh,l_line,A,rf,omega,sparam,g_param,g_cond,g_param_joint)
+  use  outerinnerproduct
+  use  iccg_var_takuto ! rf is not included, see m_iccg_var_takuto.f90
+  use  mesh_type       ! see m_mesh_type.f90
+  use  line_type       ! see m_line_type.f90
+  use  fem_util        ! for volume, intv, (see m_fem_utiil.f90 )
+  use  fem_edge_util   ! see fem_edge_util.f90
+  use  param
+  use  param_jointinv  !2021.12 25 2017.08.31
+  use  constants,      only:pi,dmu,epsilon  ! see m_constants.f90, 2018.06.25
+  use  m_param_ana,    only:cond,istructure ! see m_param_ana.f90
+  implicit none
+  type(mesh),             intent(in)    :: h_mesh
+  type(line_info),        intent(in)    :: l_line
+  type(param_forward),    intent(in)    :: g_param
+  type(param_joint),intent(in)    :: g_param_joint ! 2017.08.31
+  type(param_source),     intent(in)    :: sparam
+  type(param_cond),       intent(in)    :: g_cond
+  type(global_matrix),    intent(inout) :: A
+  real(8),                intent(in)    :: omega
+  complex(8),             intent(out)   :: rf(l_line%nline,g_param_joint%nsr_inv)!20170713
+  integer(4),allocatable,dimension(:)   :: srcindex                  ! 2017.07.13
+  integer(4)                            :: nsr_inv                   ! 2017.07.13
+  real(8)                               :: elm_xyz(3,4),xx(3,6), gn(3,4)
+  real(8)                               :: w(6,3), S(6,6), v,  yy
+  complex(8)                            :: sigma                     ! 2018.06.25
+  complex(8)                            :: iunit=(0.d0, 1.d0), rhs1
+  complex(8),           dimension(6,6)  :: elm_k, S1
+  integer(4),           dimension(6)    :: table_dof_elm, idirection
+  integer(4) :: iele, i, j, k, l, m, n, ii, jj, id_group
+  !---------------  scales ------------------------------------------------------
+  real(8), parameter                    :: L0=1.d+3  ! [m]  scale length
+  real(8)                               :: AA, a1(4),a2(4), sigma_bell
+  complex(8)                            :: BB
+  complex(8)                            :: b3(3,4),bl(6)
+  logical                               :: itrue
+  real(8),allocatable,dimension(:,:)    :: x3s,x3e ! 2017.07.13
+  real(8)            ,dimension(3)      :: PQ,unitPQ,x3p1,x3p2,localPQ,x1,x2,x3
 
-!#[0]## set
-  nsr_inv  = g_param_joint%nsr_inv   ! 2017.08.31
-  allocate(srcindex(nsr_inv))        ! 2017.07.13
-  srcindex = g_param_joint%srcindex  ! 2017.08.31
-  allocate(x3s(3,nsr_inv),x3e(3,nsr_inv)   ) ! 2017.07.11
+  !# the followings are src2/src_inv_joint/from forward_joint.f90
+  type(mesh)                            :: h_ocean          ! 2026.07.30
+  complex(8)                            :: S2(6),vF(3,4)    ! 2026.07.30
+  complex(8),allocatable,dimension(:,:) :: vxyz             ! 2026.07.30
+  real(8),allocatable,dimension(:,:)    :: fxyz             ! 2026.07.30
+  integer(4)                            :: no(4),elementnode ! 2026.07.30
+  integer(4)                            :: node,nodes        ! 2026.07.30
+  real(8)                               :: F(3)              ! 2026.07.30
 
-  do j=1,nsr_inv                          ! 2017.07.13
-   x3s(1:3,j)=sparam%xs1(1:3,srcindex(j))  ! [km]   2017.07.13
-   x3e(1:3,j)=sparam%xs2(1:3,srcindex(j))  ! [km]   2017.07.13
-  end do
+  node  = h_mesh%node    ! node for em3d.msh    2026.07.30 based on solver_mpi/forward_bxyz_mpi.f90
+  nodes = g_param%nodes  ! node for ocean_meesh 2026.07.30 based on solver_mpi/forward_bxyz_mpi.f90
+  allocate(vxyz(3,node),fxyz(3,node)) !         2026.07.30 based on solver_mpi/forward_bxyz_mpi.f90
+    
+  call readfxyz(nodes,node,fxyz,g_param%fxyz_file) ! 2026.07.30
+  call readvxyz(nodes,node,vxyz,g_param%vxyz_file) ! 2026.07.30
 
-do iele=1, h_mesh%ntet  ! start elemetn loop
-!#
-  !# [1] ## ! check the direction of edge, compared to the defined lines
-  idirection(1:6)=1
-  do j=1,6
-    if ( l_line%n6line(iele, j) .lt. 0 ) idirection(j)=-1
-  end do
+  !#[0]## set
+    !nsr_inv  = g_param_joint%nsr_inv   ! 2017.08.31
+    !allocate(srcindex(nsr_inv))        ! 2017.07.13
+    !srcindex = g_param_joint%srcindex  ! 2017.08.31
+    !allocate(x3s(3,nsr_inv),x3e(3,nsr_inv)   ) ! 2017.07.11
 
-  !# [2] ## Prepare the coordinates for 4 nodes of elements
-  do j=1,4
-   elm_xyz(1:3,j)=h_mesh%xyz(1:3,h_mesh%n4(iele,j)) ! [km]
-  end do
-  ! [x_mn]^T=L{x'34 x'14 x'42 x'23 x'31 x'12}=L[x'_lm]^T
-  call calxmn(elm_xyz,xx)         ! see fem_util.f90
-  call gradnodebasisfun(elm_xyz,gn,v) ! see fem_util.f90
-
-  !# [3] ## First term from the rot rot, S
-  ! [ int{ (rot w) (rot w)^T }dv ]{Bsl}
-  ! Since rot w =1/3/v*x_mn, 
-  !  int (rot w) cdot (rot w) dv = 1/9/v*(x_mn cdot x_m'n')
-  AA=1.d0/9.d0/v
-  S(:,:)=0.d0
-  do j=1,6
-    do k=1,6
-	S(j,k)=inner(xx(1:3,j),xx(1:3,k))*idirection(j)*idirection(k)*AA  ! S is real
-    end do
-  end do   ! S [km*rad/s*S/m]
-
-  !# [4] ## Second term from i * omega * mu * sigma * int{ sigma w cdot w }dv {Bsl}
-  !# [4-1] ## assemble coefficient for i * omega*
-  j = h_mesh%n4flag(iele,1)                 ! 2017.09.29
-  if ( j .eq. 1 ) sigma=g_cond%sigma_air    ! 2017.09.29
-  if ( j .ge. 2 ) then                      ! 2017.09.29
-   if ( g_cond%condflag .eq. 0  )     sigma = g_cond%sigma_land(j-1) ! 2017.09.29
-   if ( g_cond%condflag .eq. 1  ) then ! condflag = 1 -> file conductivity
-    sigma = g_cond%sigma(iele - g_cond%nphys1) ! sigma store only nphys=2 element
-   end if
-  else if ( h_mesh%n4flag(iele,1) .ge. 3 ) then
-    write(*,*) "GEGEGE h_mesh%n4flag(iele,1) = ",h_mesh%n4flag(iele,1)
-    stop
-  end if
-  sigma = sigma + iunit*omega*epsilon ! 2018.06.25
-
-!  if ( h_mesh%n4flag(iele,2) .ge. 4 ) sigma=0.01d0   ! ocean
-  BB =iunit*omega*dmu*sigma *L0**2.d0 ! BB is complex in ww, dn_dx twice
-
-  !# [4-2] ## assemble scheme No.2 ( analytical assembly)
-  ! Since \nabla lambda_k =1/6/V*( x_ln \times x_lm )  is constant,
-  ! int { w_i cdot w_j }dv can be calculated analytically
-  S1(:,:)=(0.d0,0.d0)
-  ! yy = int { w_i cdot w_j }dv, where w is vector shape function
-  !      = int [n_k*gn(:,l) - n_l*gn(:,k) ] cdot [n_m*gn(:,n) - n_n*gn(:,m) ] dv
-  !      = int ( n_k*n_m ) dv [ gn(:,l) cdot gn (:,n) ]      first
-  !      - int ( n_k*n_n ) dv [ gn(:,l) cdot gn (:,m) ]       second
-  !      - int ( n_l*n_m ) dv [ gn(:,k) cdot gn (:,n) ]       third
-  !      + int ( n_l*n_n ) dv [ gn(:,k) cdot gn (:,m) ]      forth
-  do i=1,6
+    !do j=1,nsr_inv                          ! 2017.07.13
+    ! x3s(1:3,j)=sparam%xs1(1:3,srcindex(j))  ! [km]   2017.07.13
+    ! x3e(1:3,j)=sparam%xs2(1:3,srcindex(j))  ! [km]   2017.07.13
+    !end do
+  rf = 0.d0 ! 2026.07.30
+  do iele=1, h_mesh%ntet  ! start elemetn loop
+  !#
+    !# [1] ## ! check the direction of edge, compared to the defined lines
+    idirection(1:6)=1
     do j=1,6
-      k=kl(i,1);l=kl(i,2) ; m=kl(j,1) ; n=kl(j,2) ! gn*gn [km^-2], intv [km^3], yy[km]
-      yy =     intv(k,m,v)*inner(gn(:,l), gn(:,n))   & ! first term
-     &	-  intv(k,n,v)*inner(gn(:,l), gn(:,m))   & ! second term
-     &      -  intv(l,m,v)*inner(gn(:,k), gn(:,n))   & ! third term
-     &      +  intv(l,n,v)*inner(gn(:,k), gn(:,m))     ! forth term
-     S1(i,j)= yy*idirection(i)*idirection(j)*BB  ! S1 [km*rad/s*S/m]
+      if ( l_line%n6line(iele, j) .lt. 0 ) idirection(j)=-1
     end do
-  end do
 
-  !# [5] ## Construct elemnt matrix, elm_k
-  elm_k(:,:)=S(:,:)+S1(:,:) ! elm_k (complex), S(real), S2(complex)
+    !# [2] ## Prepare the coordinates for 4 nodes of elements
+    do j=1,4
+    elm_xyz(1:3,j)=h_mesh%xyz(1:3,h_mesh%n4(iele,j)) ! [km]
+    end do
+    ! [x_mn]^T=L{x'34 x'14 x'42 x'23 x'31 x'12}=L[x'_lm]^T
+    call calxmn(elm_xyz,xx)         ! see fem_util.f90
+    call gradnodebasisfun(elm_xyz,gn,v) ! see fem_util.f90
 
-  !# [6] ## Set global matrix from elm_k
-  do i=1,6
-    table_dof_elm(i)=l_line%n6line(iele,i)*idirection(i) ! make n6line positive
-  end do
-  CALL sup_iccg(elm_k,table_dof_elm,6,A%D,A%INU,A%IAU,A%AU,l_line%nline,A%iau_tot)
+    !# [3] ## First term from the rot rot, S
+    ! [ int{ (rot w) (rot w)^T }dv ]{Bsl}
+    ! Since rot w =1/3/v*x_mn, 
+    !  int (rot w) cdot (rot w) dv = 1/9/v*(x_mn cdot x_m'n')
+    AA=1.d0/9.d0/v
+    S(:,:)=0.d0
+    do j=1,6
+      do k=1,6
+    S(j,k)=inner(xx(1:3,j),xx(1:3,k))*idirection(j)*idirection(k)*AA  ! S is real
+      end do
+    end do   ! S [km*rad/s*S/m]
 
-  !# [7] ## set right hand side vector, rf  #################### Right Hand Side
-  !# [7-1] ## method for js expressed by Heaviseide function
-  do j=1,nsr_inv  ! 2017.07.13
-   call checksourceelement(x3s(:,j),x3e(:,j),elm_xyz,itrue,x3p1,x3p2)!check penetration
-   if (itrue) then ! when the cell includes the wire current
-    !CALL checkcoeff(elm_xyz,xx,gn,elm_k,S,6,S1,6,6,v)
-    call nodebasisfun(elm_xyz,x3p1,a1)
-    call nodebasisfun(elm_xyz,x3p2,a2)
-    localPQ(1:3)=x3p2(1:3) - x3p1(1:3) ! [km]
+    !# [4] ## Second term from i * omega * mu * sigma * int{ sigma w cdot w }dv {Bsl}
+    !# [4-1] ## assemble coefficient for i * omega*
+    j = h_mesh%n4flag(iele,2)                 ! 2026.07.30
+    if ( j .eq. 1 ) sigma=g_cond%sigma_air    ! 2017.09.29
+    if ( j .eq. 2 ) sigma=3.32                ! 2026.07.30 ocean
+    if ( j .ge. 3 ) then                      ! 2026.07.30
+    if ( g_cond%condflag .eq. 0  )     sigma = g_cond%sigma_land(j-1) ! 2017.09.29
+    if ( g_cond%condflag .eq. 1  ) then ! condflag = 1 -> file conductivity
+      sigma = g_cond%sigma(iele - g_cond%nphys1) ! sigma store only nphys=2 element
+    end if
+    else if ( h_mesh%n4flag(iele,2) .ge. 4 ) then
+      write(*,*) "GEGEGE h_mesh%n4flag(iele,2) = ",h_mesh%n4flag(iele,2)
+      stop
+    end if
+    sigma = sigma + iunit*omega*epsilon ! 2018.06.25
 
+  !  if ( h_mesh%n4flag(iele,2) .ge. 4 ) sigma=0.01d0   ! ocean
+    BB =iunit*omega*dmu*sigma *L0**2.d0 ! BB is complex in ww, dn_dx twice
+
+    !# [4-2] ## assemble scheme No.2 ( analytical assembly)
+    ! Since \nabla lambda_k =1/6/V*( x_ln \times x_lm )  is constant,
+    ! int { w_i cdot w_j }dv can be calculated analytically
+    S1(:,:)=(0.d0,0.d0)
+    ! yy = int { w_i cdot w_j }dv, where w is vector shape function
+    !      = int [n_k*gn(:,l) - n_l*gn(:,k) ] cdot [n_m*gn(:,n) - n_n*gn(:,m) ] dv
+    !      = int ( n_k*n_m ) dv [ gn(:,l) cdot gn (:,n) ]      first
+    !      - int ( n_k*n_n ) dv [ gn(:,l) cdot gn (:,m) ]       second
+    !      - int ( n_l*n_m ) dv [ gn(:,k) cdot gn (:,n) ]       third
+    !      + int ( n_l*n_n ) dv [ gn(:,k) cdot gn (:,m) ]      forth
     do i=1,6
-     k=kl(i,1)
-     l=kl(i,2)
-     ii=l_line%n6line(iele,i)*idirection(i)
-     rhs1= dmu*sparam%I*( &
-     &   (a1(k)+a2(k))/2.d0 * inner(gn(1:3,l),localPQ) &
-     &  -(a1(l)+a2(l))/2.d0 * inner(gn(1:3,k),localPQ) &
-     &   )*idirection(i)*1.d+6 ! [V/m] -> [mV/km]
-     rf(ii,j)=rf(ii,j) + rhs1  ! 2017.07.13
+      do j=1,6
+        k=kl(i,1);l=kl(i,2) ; m=kl(j,1) ; n=kl(j,2) ! gn*gn [km^-2], intv [km^3], yy[km]
+        yy =     intv(k,m,v)*inner(gn(:,l), gn(:,n))   & ! first term
+      &	-  intv(k,n,v)*inner(gn(:,l), gn(:,m))   & ! second term
+      &      -  intv(l,m,v)*inner(gn(:,k), gn(:,n))   & ! third term
+      &      +  intv(l,n,v)*inner(gn(:,k), gn(:,m))     ! forth term
+      S1(i,j)= yy*idirection(i)*idirection(j)*BB  ! S1 [km*rad/s*S/m]
+      end do
     end do
-   end if ! itrue is .true. end
-  end do  ! nsr_inv loop, 2017.07.13
-end do ! element loop end
 
-!write(*,*) "### GENMAT END !! ###" 2017.12.22
+    !# [5] ## Construct elemnt matrix, elm_k
+    elm_k(:,:)=S(:,:)+S1(:,:) ! elm_k (complex), S(real), S2(complex)
 
-!  do i=1,l_line%nline
-!   if (rf(i) .ne. 0.d0) write(*,*) i,"b=",rf(i)
-!  end do
-!  stop
+    !# [6] ## Set global matrix from elm_k
+    do i=1,6
+      table_dof_elm(i)=l_line%n6line(iele,i)*idirection(i) ! make n6line positive
+    end do
+    CALL sup_iccg(elm_k,table_dof_elm,6,A%D,A%INU,A%IAU,A%AU,l_line%nline,A%iau_tot)
 
-return
-end subroutine GENMAT
+    !# [7] ## set right hand side vector, rf  #################### Right Hand Side
+    !# [7-1] ## method for js expressed by Heaviseide function
+    !do j=1,nsr_inv  ! 2017.07.13
+    ! call checksourceelement(x3s(:,j),x3e(:,j),elm_xyz,itrue,x3p1,x3p2)!check penetration
+    ! if (itrue) then ! when the cell includes the wire current
+    !  !CALL checkcoeff(elm_xyz,xx,gn,elm_k,S,6,S1,6,6,v)
+    !  call nodebasisfun(elm_xyz,x3p1,a1)
+    !  call nodebasisfun(elm_xyz,x3p2,a2)
+    !  localPQ(1:3)=x3p2(1:3) - x3p1(1:3) ! [km]
+    !
+    !  do i=1,6
+    !   k=kl(i,1)
+    !   l=kl(i,2)
+    !   ii=l_line%n6line(iele,i)*idirection(i)
+    !   rhs1= dmu*sparam%I*( &
+    !   &   (a1(k)+a2(k))/2.d0 * inner(gn(1:3,l),localPQ) &
+    !   &  -(a1(l)+a2(l))/2.d0 * inner(gn(1:3,k),localPQ) &
+    !   &   )*idirection(i)*1.d+6 ! [V/m] -> [mV/km]
+    !   rf(ii,j)=rf(ii,j) + rhs1  ! 2017.07.13
+    !  end do
+    ! end if ! itrue is .true. end
+    !end do  ! nsr_inv loop, 2017.07.13
+    j = h_mesh%n4flag(iele,2)
+    S2(1:6)=(0,0)
+    if ( j .eq. 2 )then ! when iele is included in ocean mesh
+
+    do i=1,4     ! mean v*F in the tetrahedral element
+      no(i)=h_mesh%n4(iele,i)
+      F(1:3)=fxyz(1:3,no(i))  !*(cos(pi/2)+inum*sin(pi/2))!(nT)
+      vF(1:3,i) = cr_outer(vxyz(1:3,no(i)),F(1:3)) ![m/s]*[nT]=[nV/m]
+      ! vF(1:3,i) = inner_r(vxyz(1:3,no(i)),F(1:3))
+      ! vF(1:3,i)=(0.00000000001,0.00000000000001)
+    end do
+    !   write(*,*) "vF(1:3,1)",vF(1:3,1)
+    elementnode=4
+    do i=1,6
+      k=kl(i,1);l=kl(i,2)
+      do j=1,4
+        S2(i) = S2(i)+dmu*sigma*(intv(k,j,v)*rc_inner(gn(:,l),vF(:,j)) &
+            &    -  intv(l,j,v)*rc_inner(gn(:,k),vF(:,j)))*idirection(i)*(1.d+3)  !m/s-->>>mm/s
+        !  S2(i)=(0.1,0.1)
+      end do
+    end do
+    end if ! only in the ocean
+
+    !# [6] ## set right hand side vector, b_vec  ########################
+  !write(6,*)iele
+  do i=1,6                                 ! 2026.07.30
+    ii=l_line%n6line(iele,i)*idirection(i) ! 2026.07.30
+    !b_vec(ii,1) = b_vec(ii,1)+S2(i)!(mV/km)! 2026.07.30
+    rf(ii,1) = rf(ii,1)+S2(i)!(mV/km)! 2026.07.30
+  end do
+
+  end do ! element loop end
+
+  !write(*,*) "### GENMAT END !! ###" 2017.12.22
+
+  !  do i=1,l_line%nline
+  !   if (rf(i) .ne. 0.d0) write(*,*) i,"b=",rf(i)
+  !  end do
+  !  stop
+
+  return
+  end subroutine GENMAT
 !################################################### checkvalues
 subroutine checkcoeff(elm_xyz,xx,gn,elm_k,S,dof1,S1,dof2,dof3,v)
 implicit none

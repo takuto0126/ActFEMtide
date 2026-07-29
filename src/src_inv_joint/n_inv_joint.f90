@@ -1100,7 +1100,7 @@ subroutine setcond(h_cond,g_mesh,sigmahomo)
  !# cal culate nphys2
  nphys2 = 0
  do i=1,ntet
-  if ( n4flag(i,2) .ge. 2 ) nphys2 = nphys2 + 1
+  if ( n4flag(i,2) .ge. 3 ) nphys2 = nphys2 + 1 ! 2026.07.30 adjusted for ActFEMtide
  end do
  write(*,*) "nphys2=",nphys2
 
