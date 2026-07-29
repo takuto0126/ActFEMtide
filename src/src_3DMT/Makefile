@@ -1,16 +1,16 @@
 # Coded on Oct. 12, 2021 Takuto Minami
 
-FC=ifort# for EIC
+FC=ifx# for EIC
 #OPT=-i-dynamic
 VPATH = ../common ../solver  ../src_2D/ ../src_inv/
-#OPT0= -O3 -xAVX -mkl=parallel
-OPT0= -O -check bounds -traceback -g -mkl=parallel
+OPT0= -O3 -xAVX -mkl=parallel
+OPT0= -O -check bounds -traceback -g -qmkl=parallel
 
 #OPT0= -O3 -xCORE-AVX2 -mkl=parallel -lmpi
 
-#2016.03.03 solver with many modules
+# solver with many modules
 target1=n_ebfem_3DMT.exe
-objs1= m_constants.o  m_param_ana.o m_outerinnerproduct.o m_matrix.o m_fem_util.o m_fem_edge_util.o m_line_type.o  m_param.o m_obs_type.o m_outresp.o m_mesh_type.o  m_triangle.o m_face_type.o m_iccg_var_takuto.o sort_index.o m_surface_type.o solvePARDISO.o m_param_mt.o forward_2DTM.o forward_3DMT.o n_ebfem_3DMT.o
+objs1= m_caltime.o m_constants.o  m_param_ana.o m_outerinnerproduct.o m_matrix.o m_fem_util.o m_fem_edge_util.o m_line_type.o  m_param.o m_obs_type.o m_outresp.o m_mesh_type.o  m_triangle.o m_face_type.o m_iccg_var_takuto.o sort_index.o m_surface_type.o solvePARDISO.o m_param_mt.o forward_2DTM.o forward_3DMT.o n_ebfem_3DMT.o
 
 $(target1) : $(objs1)
 	$(FC) $(OPT0) $(objs1) -o $(target1)
