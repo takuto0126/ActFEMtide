@@ -9,6 +9,7 @@ use param        ! 2021.12.15
 use param_mt     ! 2021.12.14
 use constants    ! added on 2016.10.17
 use surface_type ! 2021.09.14
+use caltime      ! 2025.06.24
 implicit none
 !include "../mesh_for_FEM/meshpara.f90" ! zmin, zmax, xout, yout! commented out on201610.17
 !--------------- input and output variants ------------------
@@ -28,6 +29,9 @@ complex(8),allocatable,dimension(:,:) :: b_vec     ! right hand side vector
 logical,   allocatable,dimension(:,:) :: line_bc   ! 2021.09.14
 integer(4) :: i,j,k,nsr=2
 real(8)    :: omega,zmin,zmax,xout,yout
+type(watch) :: t_watch ! 2025.06.24
+
+call watchstart(t_watch) ! 2025.09.17
 allocate( b_vec(nline,2),Avalue_bc(nline,2),line_bc(  nline,2) )
 
 !#[1]## set
@@ -36,7 +40,7 @@ zmax = g_param_mt%zbound(4) ! 2021.12.15
 xout = g_param_mt%xbound(4) ! 2021.12.15
 yout = g_param_mt%ybound(4) ! 2021.12.15
 !write(*,*) "### forward_3DMT start nline"
-write(*,*) zmin,zmax,xout,yout
+!write(*,*) zmin,zmax,xout,yout
 !write(*,*) "ip",ip
 
 !#[3]## SET Coefficient matrix and Generate Matrix
@@ -67,17 +71,20 @@ CALL GENBCMT(g_surface,omega,nline,Avalue_bc,line_bc) ! ok 2021.09.14
 !#[6]## Set Boundary Condition for dirichlet boundary; Avalue_bc -> A and b_vec
 CALL SET_BC_3Djoint(A, nline, nsr, b_vec, Avalue_bc, line_bc(:,1), ip) ! ok 2021.09.14
 
-open(1,file="bc.dat")
-do i=1,nline
- if (line_bc(i,1) ) write(1,'(i6,4g15.7)'),i,Avalue_bc(i,1:2)
-end do
-close(1)
+if (.false.) then
+ open(1,file="bc.dat")
+ do i=1,nline
+   if (line_bc(i,1) ) write(1,'(i6,4g15.7)'),i,Avalue_bc(i,1:2)
+ end do
+ close(1)
+end if
 
 !#[7]## Solve
 !call solveMUMPS(doftot,A,b_vec,bs,ip)  ! for MacbookPro 15inch
 call solvePARDISO(nline,nsr,A,b_vec,al_MT,ip) !　2017.07.11
 
-write(*,*) "### forward_bxyz END !! ip=",ip,"freq=",freq,"###"
+call watchstop(t_watch) ! 2025.09.17
+write(*,'(a,i2,a,f8.4,a,f6.3,a)') " ### forward_3DMT   END!! ### ip=",ip," freq=",freq," [Hz] Time=",t_watch%time,"[min]"!2025.09.17
 return
 end subroutine forward_3DMT
 
@@ -181,6 +188,7 @@ use  line_type       ! see m_line_type.f90
 use  fem_util        ! for volume, intv, (see m_fem_utiil.f90 )
 use  fem_edge_util   ! see fem_edge_util.f90
 use  param
+use  caltime         ! common/m_caltime.f90 2025.06.25   
 !use  m_param_ana, only:cond,istructure ! see m_param_ana.f90 commented out 2021.07.17
 use  constants,   only:pi,dmu          ! see m_constants.f90, 2017.07.11
 implicit none
@@ -203,8 +211,10 @@ real(8)                             :: AA, a1(4),a2(4),sigma_bell,localPQ(3),x3p
 complex(8)                          :: BB
 complex(8)                          :: b3(3,4),bl(6)
 logical                             :: itrue
+type(watch)                         :: t_watch ! 2025.06.25
 !real(8), allocatable,dimension(:,:) :: x3s,x3e  ! 2017.07.11
 !real(8),             dimension(3)   :: x3p1,x3p2,localPQ,x1,x2,x3
+call watchstart(t_watch) ! 2025.06.25
 
 !#[1] ## left-hand side matrix
 do iele=1, h_mesh%ntet  ! start elemetn loop
@@ -239,13 +249,13 @@ do iele=1, h_mesh%ntet  ! start elemetn loop
   !# [4-1] ## assemble coefficient for i * omega*
   j = h_mesh%n4flag(iele,1)                 ! 2017.09.29
   if ( j .eq. 1 ) sigma=g_cond%sigma_air    ! 2017.09.29
-  if ( j .eq. 2 ) sigma=g_cond%sigma_air
-  if ( j .ge. 3 ) then                      ! 2017.09.29
+  if ( j .eq. 2 ) sigma=3.33                ! 2026.07.29 modified for ActFEMtide same format with solver_mpi/forward_bxyz.f90
+  if ( j .ge. 3 ) then                      ! 2026.07.30 modified for ActFEMtide
    if ( g_cond%condflag .eq. 0  )     sigma = g_cond%sigma_land(j-1) ! 2017.09.29
    if ( g_cond%condflag .eq. 1  ) then ! condflag = 1 -> file conductivity
     sigma = g_cond%sigma(iele - g_cond%nphys1) ! sigma store only nphys=2 element
    end if
-  else if ( h_mesh%n4flag(iele,1) .ge. 4 ) then
+  else if ( h_mesh%n4flag(iele,1) .ge. 4 ) then ! Modified for ActFEMtide 2026.07.29
     write(*,*) "GEGEGE h_mesh%n4flag(iele,1) = ",h_mesh%n4flag(iele,1)
     stop
   end if
@@ -287,7 +297,8 @@ end do    ! element loop end
 
 b_vec(:,:)=0.d0 ! 2021.12.15
 
-write(*,*) "### GENMAT_MT END !! ###"
+call watchstop(t_watch) ! 2025.06.25
+write(*,'(a,f8.5,a)') " ### GENMAT_MT      END!! ### Time=",t_watch%time," [min]" ! 2025.09.18
 
 !  do i=1,l_line%nline
 !   if (b_vec(i) .ne. 0.d0) write(*,*) i,"b=",b_vec(i)
@@ -618,7 +629,7 @@ complex(8)  ::  temp
           enddo
         endif
       enddo
-if (ip .eq. 0) write(*,*) "### SET_BC_3DMT END!! ###"
+if (ip .eq. 0) write(*,'(a)') " ### SET_BC_3DMT END!! ###" ! 2025.09.18
 RETURN
 END
 !
