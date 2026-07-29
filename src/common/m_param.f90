@@ -151,8 +151,8 @@ integer(4)                  :: i,j,nobs,input=2,nsource
 character(70)               :: site
 real(8)                     :: lonorigin,latorigin,a
 character(100)              :: paramfile
-integer(4),    parameter    :: n = 1000 ! 2020.09.28
-character(200),dimension(n) :: lines    ! 2020.09.28
+!integer(4),    parameter    :: n = 1000 ! 2020.09.28
+!character(200),dimension(n) :: lines    ! 2020.09.28
 real(8) :: pi,d2r,radius
 pi=4.*atan(1.d0)
 d2r=pi/180.
@@ -160,7 +160,8 @@ d2r=pi/180.
 write(*,*) ""
 write(*,*) "<Please input the forward parameter file>" ! 2020.09.28
 read(*,'(a)') paramfile           ! 2020.09.28
-call readcontrolfile(paramfile,n,lines) ! 2020.09.28
+!call readcontrolfile(paramfile,n,lines) ! 2020.09.28
+call readcontrolfile(paramfile) ! 2026.07.29
 
 open(input,file="tmp.ctl")
 !#[2]# read mesh_param file
@@ -628,6 +629,21 @@ if (present(angle)) call rotate(xyout(1),xyout(2),angle) ! 2024.08.28
 
 return
 end subroutine
+!##########################################################
+subroutine rotate(x,y,theta) ! copied from latest m_param.f90 in ActFEM/src/common/m_param.f90 2026.07.29
+implicit none
+real(8),intent(in)    :: theta
+real(8),intent(inout) :: x,y
+real(8)    :: x1,y1,pi,d2r,s
+pi=4.*atan(1.d0)
+d2r=pi/180.
+s=theta*d2r
+x1= cos(s)*x + sin(s)*y  
+y1=-sin(s)*x + cos(s)*y
+x=x1
+y=y1
+return
+end
 
 !######################################################### UTMGMT
 subroutine UTMGMT(xin,yin,xout,yout,zone,iflag)
@@ -972,7 +988,7 @@ write(*,*)"subtractcomment start, n=",n
 call subtractcommentout(n,lines)
 
 open(1,file="tmp.ctl")
-write(*,*) "ikeep=",ikeep ! 2025.07.17
+if (present(ikeep)) write(*,*) "ikeep is included in input: ikeep =",ikeep ! 2026.07.29
 do i=1,n
  if ( present(ikeep) ) then !2025.04.24
    if ( ikeep == 1  ) write(1,'(a)')  lines(i)(1:len_trim(lines(i))) 
