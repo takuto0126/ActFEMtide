@@ -689,7 +689,7 @@ CALL classifytri2grd(h_mesh,glist)   ! classify ele to glist,see
 !#[3] search for the triangle including (x1,y1)
 
 idev = free_unit()
-open(idev,file=trim(g_param_mt%outputfolder)//"site.dat")! 2026.07.29
+open(idev,file=trim(g_param_mt%outputfolder)//"site_mt.dat")! 2026.07.29
 do j=1,nobs
     call findtriwithgrid(h_mesh,glist,xyzobs(1:2,j),iele,a3)
     n1 = n3k(iele,1); n2 = n3k(iele,2) ; n3 = n3k(iele,3)
