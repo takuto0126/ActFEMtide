@@ -5,85 +5,106 @@ use param
 implicit none
 
 type obsfiles
-integer(4) :: nfile
-character(50),allocatable,dimension(:) :: filename
-integer(4),   allocatable,dimension(:) :: devicenumber
-end type
+ integer(4) :: nfile
+ character(50),allocatable,dimension(:) :: filename
+ integer(4),   allocatable,dimension(:) :: devicenumber
+ end type
 
-type respdata
-integer(4) :: nobs
-complex(8),allocatable,dimension(:) :: ftobs  ! 2021.09.15
-real(8),   allocatable,dimension(:) :: fpobsamp
-real(8),   allocatable,dimension(:) :: fpobsphase
-real(8),   allocatable,dimension(:) :: fsobsamp
-real(8),   allocatable,dimension(:) :: fsobsphase
-real(8),   allocatable,dimension(:) :: ftobsamp
-real(8),   allocatable,dimension(:) :: ftobsphase
-end type
+type respdata ! ACTIVE data is assumed
+ integer(4) :: nobs
+ complex(8),allocatable,dimension(:) :: ftobs  ! 2021.09.15
+ real(8),   allocatable,dimension(:) :: fpobsamp
+ real(8),   allocatable,dimension(:) :: fpobsphase
+ real(8),   allocatable,dimension(:) :: fsobsamp
+ real(8),   allocatable,dimension(:) :: fsobsphase
+ real(8),   allocatable,dimension(:) :: ftobsamp
+ real(8),   allocatable,dimension(:) :: ftobsphase
+ end type
 
 ! MT impedances are added 2021.09.15
 type respmt ! 2021.09.14
-integer(4) :: nobs ! 2021.09.15
-complex(8),allocatable,dimension(:) :: zxx ! x north, y east  ! 2021.09.15
-complex(8),allocatable,dimension(:) :: zxy   ! 2021.09.15
-complex(8),allocatable,dimension(:) :: zyx   ! 2021.09.15
-complex(8),allocatable,dimension(:) :: zyy   ! 2021.09.15
-real(8),   allocatable,dimension(:) :: rhoxx ! 2021.09.15
-real(8),   allocatable,dimension(:) :: rhoxy ! 2021.09.15
-real(8),   allocatable,dimension(:) :: rhoyx ! 2021.09.15
-real(8),   allocatable,dimension(:) :: rhoyy ! 2021.09.15
-real(8),   allocatable,dimension(:) :: phaxx ! 2021.09.15
-real(8),   allocatable,dimension(:) :: phaxy ! 2021.09.15
-real(8),   allocatable,dimension(:) :: phayx ! 2021.09.15
-real(8),   allocatable,dimension(:) :: phayy ! 2021.09.15
-end type
+ integer(4) :: nobs ! 2021.09.15
+ complex(8),allocatable,dimension(:) :: zxx ! x north, y east  ! 2021.09.15
+ complex(8),allocatable,dimension(:) :: zxy   ! 2021.09.15
+ complex(8),allocatable,dimension(:) :: zyx   ! 2021.09.15
+ complex(8),allocatable,dimension(:) :: zyy   ! 2021.09.15
+ real(8),   allocatable,dimension(:) :: rhoxx ! 2021.09.15
+ real(8),   allocatable,dimension(:) :: rhoxy ! 2021.09.15
+ real(8),   allocatable,dimension(:) :: rhoyx ! 2021.09.15
+ real(8),   allocatable,dimension(:) :: rhoyy ! 2021.09.15
+ real(8),   allocatable,dimension(:) :: phaxx ! 2021.09.15
+ real(8),   allocatable,dimension(:) :: phaxy ! 2021.09.15
+ real(8),   allocatable,dimension(:) :: phayx ! 2021.09.15
+ real(8),   allocatable,dimension(:) :: phayy ! 2021.09.15
+ end type
+
+!# Tipper data 2023.12.22 
+type resptip ! 2021.09.14
+ integer(4) :: nobs ! 2023.12.22
+ complex(8),allocatable,dimension(:) :: tx ! 2023.12.22
+ complex(8),allocatable,dimension(:) :: ty ! 2023.12.22
+ end type
 
 contains
+!######################################### ALLOCATERESPTIP
+! coded on 2023.12.22
+subroutine ALLOCATERESPTIP(nobs,resp_tip)
+ implicit none
+ integer(4),intent(in):: nobs
+ type(resptip),intent(out) :: resp_tip
+
+ resp_tip%nobs=nobs
+ allocate(resp_tip%tx(nobs))
+ allocate(resp_tip%ty(nobs))
+
+ return
+ end
+
 !######################################### ALLOCATERESPMT
 ! coded on 2021.09.14
 subroutine ALLOCATERESPMT(nobs,resp_mt)
-implicit none
-integer(4),    intent(in)  :: nobs
-type(respmt),  intent(out) :: resp_mt
+ implicit none
+ integer(4),    intent(in)  :: nobs
+ type(respmt),  intent(out) :: resp_mt
 
-resp_mt%nobs=nobs
-allocate(resp_mt%zxx(  nobs))
-allocate(resp_mt%zxy(  nobs))
-allocate(resp_mt%zyx(  nobs))
-allocate(resp_mt%zyy(  nobs))
-allocate(resp_mt%rhoxx(nobs))
-allocate(resp_mt%rhoxy(nobs))
-allocate(resp_mt%rhoyx(nobs))
-allocate(resp_mt%rhoyy(nobs))
-allocate(resp_mt%phaxx(nobs))
-allocate(resp_mt%phaxy(nobs))
-allocate(resp_mt%phayx(nobs))
-allocate(resp_mt%phayy(nobs))
+ resp_mt%nobs=nobs
+ allocate(resp_mt%zxx(  nobs))
+ allocate(resp_mt%zxy(  nobs))
+ allocate(resp_mt%zyx(  nobs))
+ allocate(resp_mt%zyy(  nobs))
+ allocate(resp_mt%rhoxx(nobs))
+ allocate(resp_mt%rhoxy(nobs))
+ allocate(resp_mt%rhoyx(nobs))
+ allocate(resp_mt%rhoyy(nobs))
+ allocate(resp_mt%phaxx(nobs))
+ allocate(resp_mt%phaxy(nobs))
+ allocate(resp_mt%phayx(nobs))
+ allocate(resp_mt%phayy(nobs))
 
-return
-end subroutine
+ return
+ end subroutine
 !######################################### ALLOCATERESPDATA
 subroutine ALLOCATERESPDATA(nobs,resp)
-implicit none
-integer(4),    intent(in) :: nobs
-type(respdata),intent(out) :: resp
+ implicit none
+ integer(4),    intent(in) :: nobs
+ type(respdata),intent(out) :: resp
 
-resp%nobs=nobs
-allocate(resp%ftobs     (resp%nobs)) ! 2021.09.15
-allocate(resp%fpobsamp  (resp%nobs))
-allocate(resp%fpobsphase(resp%nobs))
-allocate(resp%fsobsamp  (resp%nobs))
-allocate(resp%fsobsphase(resp%nobs))
-allocate(resp%ftobsamp  (resp%nobs))
-allocate(resp%ftobsphase(resp%nobs))
+ resp%nobs=nobs
+ allocate(resp%ftobs     (resp%nobs)) ! 2021.09.15
+ allocate(resp%fpobsamp  (resp%nobs))
+ allocate(resp%fpobsphase(resp%nobs))
+ allocate(resp%fsobsamp  (resp%nobs))
+ allocate(resp%fsobsphase(resp%nobs))
+ allocate(resp%ftobsamp  (resp%nobs))
+ allocate(resp%ftobsphase(resp%nobs)) 
 
-return
-end subroutine
+ return
+ end subroutine
 
 !######################################################
 !# 2017.10.12
 !# copied from fluidity-4.1.10/femtools/Funits.F90
-  function free_unit()
+function free_unit()
     !!< Find a free unit number. Start from unit 10 in order to ensure that
     !!< we skip any preconnected units which may not be correctly identified
     !!< on some compilers.
@@ -105,40 +126,41 @@ end subroutine
   end function
 
 !######################################## OUTFREQFILES
+!# output ACTIVE data at each freqency
 subroutine OUTFREQFILES(freq,resp,g_param,comp)
-implicit none
-real(8),intent(in) :: freq
-type(respdata),intent(in) :: resp
-type(param_forward),intent(in) :: g_param
-character(2),intent(in) :: comp
-character(50) :: filename
-character(9) :: num
-character(50) :: header
-integer(4) :: i,j
+ implicit none
+ real(8),            intent(in) :: freq
+ type(respdata),     intent(in) :: resp
+ type(param_forward),intent(in) :: g_param
+ character(2),       intent(in) :: comp
+ character(50)                  :: filename
+ character(9)                   :: num
+ character(50)                  :: header
+ integer(4)                     :: i,j
 
-header=g_param%outputfolder
-write(num,'(e9.2)') freq
-filename=header(1:len_trim(header))//"freqresp"//num(2:9)//comp(1:2)//".dat"
+ header=g_param%outputfolder
+ write(num,'(e9.2)') freq
+ filename=header(1:len_trim(header))//"freqresp"//num(2:9)//comp(1:2)//".dat"
 
-open(1,file=filename)
-!write(*,*) "resp%nobs=",resp%nobs
-do i=1,resp%nobs
- write(1,'(8e15.7)') (g_param%xyzobs(j,i),j=1,2),resp%ftobsamp(i),  resp%ftobsphase(i),&
+ open(1,file=filename)
+ !write(*,*) "resp%nobs=",resp%nobs
+ do i=1,resp%nobs
+   write(1,'(8e15.7)') (g_param%xyzobs(j,i),j=1,2),resp%ftobsamp(i),  resp%ftobsphase(i),&
    &  resp%fsobsamp(i),resp%fsobsphase(i),resp%fpobsamp(i),resp%fpobsphase(i)
-end do
-close(1)
+ end do
+ close(1)
 
-return
-end subroutine
+ return
+ end subroutine
 
 !######################################### MAKEOBSFILES
 subroutine MAKEOBSFILES(g_param,files)
 implicit none
-type(param_forward),intent(in) :: g_param
-type(obsfiles),intent(out) :: files
-integer(4) :: i
-character(3) :: num
-character(50) :: header,site
+type(param_forward),intent(in)  :: g_param
+type(obsfiles),     intent(out) :: files
+integer(4)                      :: i
+character(3)                    :: num
+character(50)                   :: header,site
 
 !#[1] set # of files
 files%nfile=g_param%nobs
@@ -162,12 +184,13 @@ return
 end subroutine
 
 !######################################### OUTOBSFILES
+!# output ACTIVE output files
 subroutine OUTOBSFILES(freq,files,resp5)
 implicit none
-type(obsfiles),intent(in) :: files
+type(obsfiles),             intent(in) :: files
 type(respdata),dimension(5),intent(in) :: resp5
-real(8),intent(in) :: freq
-integer(4) :: i,j
+real(8),                    intent(in) :: freq
+integer(4)                             :: i,j
 
 do i=1,files%nfile
  write(files%devicenumber(i),'(11g15.7)') freq,(resp5(j)%ftobsamp(i),resp5(j)%ftobsphase(i),j=1,5)
@@ -189,7 +212,7 @@ type(obs_info),     intent(in) :: obs
 character(50)                  :: filename
 character(9)                   :: num
 character(1)  :: nn
-character(70) :: header,xyheader
+character(50) :: header,xyheader
 integer(4)    :: i,j,k
 integer(4)    :: len1,len2 ! 2017.10.12
 integer(4)    :: idev      ! 2017.10.12
@@ -206,10 +229,10 @@ do k=1,nsr
  filename=header(1:len1)//xyheader(1:len2)//num(2:9)//"_S"//nn//".dat"
  idev = free_unit() ! 2017.10.12
  open(idev,file=filename)
- do i=1,obs%nobs ! 2017.10.12
-  write(idev,'(13f15.7)') (obs%xyz_obs(j,i),j=1,3),    &
-  & (resp(j,k)%ftobsamp(i),resp(j,k)%ftobsphase(i),j=1,5)
- end do
+   do i=1,obs%nobs ! 2017.10.12
+     write(idev,'(12e15.7)') (obs%xyz_obs(j,i),j=1,2),    &
+     & (resp(j,k)%ftobsamp(i),resp(j,k)%ftobsphase(i),j=1,5)
+   end do
  close(idev) ! 2017.10.12
 end do
 
@@ -256,7 +279,7 @@ real(8)        :: freq
   end do
  end do
 
- write(*,*) "### OUTOBSFILESFWD END!! ###"
+ write(*,*) "### OUTOBSFILESFWD END!!##"
 
 return
 end subroutine
