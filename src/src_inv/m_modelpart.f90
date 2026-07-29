@@ -15,6 +15,12 @@ type modelpara
  real(8),allocatable,dimension(:) :: xdiv
  real(8),allocatable,dimension(:) :: ydiv
  real(8),allocatable,dimension(:) :: zdiv
+ ! icomb = -1 inner outer mode 2024.10.03
+ integer(4)    :: nxdiv_in,nydiv_in,nzdiv_in ! 2024.10.03
+ real(8),allocatable,dimension(:) :: xdiv_in ! 2024.10.03
+ real(8),allocatable,dimension(:) :: ydiv_in ! 2024.10.03
+ real(8),allocatable,dimension(:) :: zdiv_in ! 2024.10.03
+
 end type
 
 type model
@@ -25,8 +31,9 @@ type model
  integer(4),allocatable,dimension(:) :: iactive   ! [nmodel] 1:active,0:innactive 20180318
  integer(4),allocatable,dimension(:) :: index     ! [nphys2] added on May 13, 2017
  integer(4),allocatable,dimension(:) :: ele2model ! [nphys2] only nphysinv is for inv
- real(8),allocatable,dimension(:)    :: rho_model ! [nmodel]
+ real(8),allocatable,dimension(:)    :: rho_model    ! [nmodel]
  real(8),allocatable,dimension(:)    :: logrho_model ! [nmodel]
+ real(8),allocatable,dimension(:)    :: modelvolume  ! [nmodel] [km^3]2022.11.01 
  type(real_crs_matrix)               :: model2ele    ! id for global element space
  ! only for inv_mdm 2017.10.31
  integer(4),allocatable,dimension(:) :: dm2modelptr  ! [1:nmodel] id for mother model
@@ -43,6 +50,8 @@ implicit none
 type(modelpara),intent(out) :: g_modelpara
 integer(4),intent(in) :: idev
 integer(4) :: i,j,nxdiv,nydiv,nzdiv
+real(8) :: xdiv_in_start,xdiv_in_end,xdiv_in_inc
+real(8) :: ydiv_in_start,ydiv_in_end,ydiv_in_inc
 
 !open(idev,file=ifile)
  write(*,*) "" !2020.09.29
@@ -50,6 +59,7 @@ integer(4) :: i,j,nxdiv,nydiv,nzdiv
  write(*,40) " < icombine = 0: not combine the outside model >"
  write(*,40) " < icombine = 1: combine the outside models and make it variable through inversion >"! 2020.09.29
  write(*,40) " < icombine = 2: combine the outside model and fix it to the initial model >"    ! 2020.09.29
+ write(*,40) " < icombine = -1 inner and outer model mode >"    ! 2025.09.22
  read(idev,'(20x,i5)') g_modelpara%icombine              ! 2017.09.20
  write(*,42) " icombine =", g_modelpara%icombine ! 2020.09.29
 !# xdiv
@@ -90,13 +100,100 @@ integer(4) :: i,j,nxdiv,nydiv,nzdiv
  write(*,43) (g_modelpara%zdiv(i),i=1,nzdiv)
 ! write(*,'(g15.7)')   (g_modelpara%zdiv(i),i=1,nzdiv) commented out 2017.12.25
 !close(idev)
+
+ !### when icombine = -1 2024.10.03############################################inner outer mode
+ if ( g_modelpara%icombine .eq. -1 ) then ! outer inner mode 2024.10.03 
+ ! start to read inner mesh
+ !read(idev,*) ! ## inner mesh
+ !read(idev,*) ! ## x
+ write(*,*) ""
+ write(*,40) "<############ Inner moderl block part ##############>" !2020.09.29
+ write(*,*)  "icombine = -1 !!" 
+ !
+ read(idev,*) xdiv_in_start
+ read(idev,*) xdiv_in_end
+ read(idev,*) xdiv_in_inc
+ write(*,*) ""
+ write(*,*) "< x >"
+ write(*,'(a,3f9.4)') "xdiv_in_start, xdiv_in_end,xdiv_in_inc",xdiv_in_start, xdiv_in_end, xdiv_in_inc
+ g_modelpara%nxdiv_in = (xdiv_in_end - xdiv_in_start)/xdiv_in_inc + 1
+ write(*,*) "nxdiv_in =",g_modelpara%nxdiv_in
+ allocate( g_modelpara%xdiv_in(g_modelpara%nxdiv_in) )
+ do i=1,g_modelpara%nxdiv_in
+  g_modelpara%xdiv_in(i) = (i-1)*xdiv_in_inc + xdiv_in_start
+ end do 
+ write(*,43) (g_modelpara%xdiv_in(i),i=1,g_modelpara%nxdiv_in)
+ 
+ !read(idev,*) ! ## y
+ write(*,*) ""
+ write(*,*) "< y >"
+ read(idev,*) ydiv_in_start
+ read(idev,*) ydiv_in_end
+ read(idev,*) ydiv_in_inc
+ write(*,'(a,3f9.4)') "ydiv_in_start, ydiv_in_end,ydiv_in_inc",ydiv_in_start, ydiv_in_end,ydiv_in_inc 
+ g_modelpara%nydiv_in = (ydiv_in_end - ydiv_in_start)/ydiv_in_inc + 1
+ write(*,*) "nydiv_in =",g_modelpara%nydiv_in
+ allocate( g_modelpara%ydiv_in(g_modelpara%nydiv_in) )
+ do i=1,g_modelpara%nydiv_in
+  g_modelpara%ydiv_in(i) = (i-1)*ydiv_in_inc + ydiv_in_start
+ end do
+ write(*,43) (g_modelpara%ydiv_in(i),i=1,g_modelpara%nydiv_in)
+ 
+ !read(idev,*) ! ## z
+  write(*,*) ""
+  write(*,*) "< z >"
+  read(idev,*) g_modelpara%nzdiv_in
+ write(*,*) "nzdiv_in =",g_modelpara%nzdiv_in
+ allocate(g_modelpara%zdiv_in(g_modelpara%nzdiv_in))
+ do i=1,g_modelpara%nzdiv_in
+  read(idev,*) g_modelpara%zdiv_in(i)
+ end do
+ write(*,43) (g_modelpara%zdiv_in(i),i=1,g_modelpara%nzdiv_in)
+
+end if
+ write(*,*) ""
+ write(*,*) "### READ MODELPARA END!! ###" ! 2024.10.04
 40 format(a)! 2020.09.29
 41 format(a,a)
 42 format(a,i3)
 43 format(10f9.4)
 return
 end subroutine
+!#################################################### genmodelvolume 2022.11.01
+subroutine genmodelvolume(g_model,g_mesh)
+use mesh_type
+use fem_util
+implicit none
+type(model),intent(inout) :: g_model
+type(mesh), intent(in) :: g_mesh
+integer(4) :: i,j,k,nmodel,iele
+integer(4),allocatable,dimension(:) :: stack,item
+real(8),   allocatable,dimension(:) :: modelvolume
+real(8) :: gn(3,4),v,elm_xyz(3,4)
 
+nmodel = g_model%nmodel
+allocate(modelvolume(nmodel))
+modelvolume(:) = 0.d0
+stack = g_model%model2ele%stack ! allocate and fill
+item  = g_model%model2ele%item  ! allocate and fill
+
+do i=1,nmodel
+ do j=stack(i-1)+1,stack(i)
+   iele = item(j) ! element index
+   do k=1,4
+     elm_xyz(1:3,k)=g_mesh%xyz(1:3,g_mesh%n4(iele,k))
+   end do
+  call gradnodebasisfun(elm_xyz,gn,v)
+  modelvolume(i) = modelvolume(i) + v
+ end do
+end do
+
+!# set modelvolume
+ if ( .not. allocated(g_model%modelvolume)) allocate(g_model%modelvolume(nmodel))
+ g_model%modelvolume = modelvolume
+
+return
+end
 !#################################################### genmodelspace
 ! coded on 2017.05.10
 subroutine genmodelspace(g_mesh,g_modelpara,g_model,g_param,g_cond)
@@ -109,6 +206,7 @@ type(model),            intent(out)    :: g_model
 type(param_forward),    intent(in)     :: g_param
 type(param_cond),       intent(in)     :: g_cond
 real(8),   allocatable, dimension(:)   :: xdiv,ydiv,zdiv
+real(8),   allocatable, dimension(:)   :: xdiv_in,ydiv_in,zdiv_in ! 2024.10.04
 real(8),   allocatable, dimension(:,:) :: xyz
 integer(4),allocatable, dimension(:,:) :: n4
 integer(4),allocatable, dimension(:)   :: ele2model,elecount_model,model2model
@@ -117,6 +215,7 @@ integer(4),allocatable, dimension(:)   :: stack,item      ! 2017.05.15
 real(8)    :: xyzminmax(6),xyzcen(3)
 integer(4) :: i,j,k,ie, i1,j1,j2,k1,iele,ii
 integer(4) :: nmodel,nxdiv,nydiv,nzdiv
+integer(4) :: nmodel_in,nxdiv_in,nydiv_in,nzdiv_in,nmodel_out ! 2024.10.04
 integer(4) :: nphys2,ntet,node,icount,imodel,nphys1
 integer(4) :: icombine                   ! 2017.09.20
 integer(4),allocatable,dimension(:)    :: index
@@ -138,13 +237,23 @@ type(real_crs_matrix) :: crsout
  ydiv(1) = xyzminmax(3) ;  ydiv(nydiv+2) = xyzminmax(4)
  zdiv(1) = xyzminmax(5) ;  zdiv(nzdiv+2) = xyzminmax(6)
  if (      icombine .eq. 0 ) then       ! no combine 2017.09.20
-  nmodel = (nxdiv + 1)*(nydiv +1 )*(nzdiv + 1)  ! commented out on 2017.09.20
+   nmodel = (nxdiv + 1)*(nydiv +1 )*(nzdiv + 1)  ! commented out on 2017.09.20
  else if ( icombine .eq. 1 .or. icombine .eq. 2 ) then ! combine outside model 2018.03.16
-  nmodel = (nxdiv - 1)*(nydiv - 1 )*(nzdiv - 1) + 1   ! 2017.09.20
+   nmodel = (nxdiv - 1)*(nydiv - 1 )*(nzdiv - 1) + 1   ! 2017.09.20
+ else if ( icombine .eq. -1 ) then ! 2024.10.04 Inner block exist
+   nxdiv_in   = g_modelpara%nxdiv_in
+   nydiv_in   = g_modelpara%nydiv_in
+   nzdiv_in   = g_modelpara%nzdiv_in
+   nmodel_out = (nxdiv + 1)*(nydiv +1 )*(nzdiv + 1)         ! outside block
+   nmodel_in  = (nxdiv_in - 1)*(nydiv_in -1 )*(nzdiv_in -1) ! inside block
+   nmodel     = nmodel_out + nmodel_in
+   xdiv_in    = g_modelpara%xdiv_in
+   ydiv_in    = g_modelpara%ydiv_in
+   zdiv_in    = g_modelpara%zdiv_in
  else
-  write(*,*) "GEGEGE! stop!"                    ! 2017.09.20
+   write(*,*) "GEGEGE! stop!"                    ! 2017.09.20
  end if
- write(*,*) "# of model parameters: nmodel=",nmodel
+ write(*,*) "# of initial model parameters: nmodel=",nmodel
 !
  ntet = g_mesh%ntet
  node = g_mesh%node
@@ -162,34 +271,40 @@ do ie=1,nphys2
  xyzcen = 0.d0
  iele = index(ie)
  do i=1,4
-  xyzcen(1:3) = xyzcen(1:3) + xyz(1:3,n4(iele,i))/4.d0
+   xyzcen(1:3) = xyzcen(1:3) + xyz(1:3,n4(iele,i))/4.d0
  end do
  do k=1,nzdiv+1
-  if ( zdiv(k) .lt. xyzcen(3) .and. xyzcen(3) .le. zdiv(k+1)) then
-  do j=1,nydiv+1
-   if ( ydiv(j) .lt. xyzcen(2) .and. xyzcen(2) .le. ydiv(j+1)) then
-   do i=1,nxdiv+1
-    if ( xdiv(i) .lt. xyzcen(1) .and. xyzcen(1) .le. xdiv(i+1)) then
-     k1 = k ; j1 = j ; i1 = i
-     goto 100
-    end if
-   end do
-   end if
-  end do
-  end if
- end do
+   if ( zdiv(k) .lt. xyzcen(3) .and. xyzcen(3) .le. zdiv(k+1)) then
+     do j=1,nydiv+1
+       if ( ydiv(j) .lt. xyzcen(2) .and. xyzcen(2) .le. ydiv(j+1)) then
+         do i=1,nxdiv+1
+           if ( xdiv(i) .lt. xyzcen(1) .and. xyzcen(1) .le. xdiv(i+1)) then
+             k1 = k ; j1 = j ; i1 = i
+             goto 100
+ end if;end do;end if;end do; end if; end do
  write(*,*) "GEGEGE iele=",iele,"xyzcen=",xyzcen(1:3)
  stop
- 100 continue
+
+ 100 continue ! which cell the tetrahedron belongs is determined already as k1, j1, i1
+
  if ( icombine .eq. 1 .or. icombine .eq. 2 ) then    ! 2018.03.16
-  if ( k1 .eq. 1 .or. k1 .eq. nzdiv+1 .or. j1 .eq. 1 .or. j1 .eq. nydiv+1 .or.&
-   &    i1 .eq. 1 .or. i1 .eq. nxdiv+1 ) then        ! 2017.07.20
-   ele2model(ie) = (nydiv-1)*(nxdiv-1)*(nzdiv-1) + 1
-  else   ! 2017.07.20
-    ele2model(ie) = (k1-2)*(nydiv-1)*(nxdiv-1) + (j1-2)*(nxdiv-1) + i1-1! 2017.07.20
-  end if
+   if ( k1 .eq. 1 .or. k1 .eq. nzdiv+1 .or. j1 .eq. 1 .or. j1 .eq. nydiv+1 .or.&
+     &    i1 .eq. 1 .or. i1 .eq. nxdiv+1 ) then        ! 2017.07.20
+     ele2model(ie) = (nydiv-1)*(nxdiv-1)*(nzdiv-1) + 1
+   else   ! 2017.07.20
+     ele2model(ie) = (k1-2)*(nydiv-1)*(nxdiv-1) + (j1-2)*(nxdiv-1) + i1-1! 2017.07.20
+   end if
  else if (icombine .eq. 0 ) then ! 2017.09.20
-  ele2model(ie) = (k1-1)*(nydiv+1)*(nxdiv+1) + (j1-1)*(nxdiv+1) + i1  ! 2017.09.20
+    ele2model(ie) = (k1-1)*(nydiv+1)*(nxdiv+1) + (j1-1)*(nxdiv+1) + i1  ! 2017.09.20
+ else if (icombine .eq. -1 ) then ! 2024.10.04
+    call checkinoutinner(xyzcen,xdiv_in,ydiv_in,zdiv_in,nxdiv_in,nydiv_in,nzdiv_in,i,j,k)
+    if ( i == 0 ) then      ! outer block
+      ele2model(ie) = (k1-1)*(nydiv+1)*(nxdiv+1) + (j1-1)*(nxdiv+1) + i1
+    else                    ! inner block
+      ele2model(ie) = (k-1)*(nydiv_in-1)*(nxdiv_in-1) + (j-1)*(nxdiv_in-1) + i + nmodel_out
+    end if
+ else
+   stop
  end if ! 2017.09.20
 ! write(*,*) "ie=",ie,"index(ie)=",index(ie),"ele2model(ie)=",ele2model(ie)
 ! write(*,*) "xyzcen=",xyzcen
@@ -247,9 +362,9 @@ end do
 ! stop
 
 !#[4]## output
- g_model%nmodel           = nmodel
+ g_model%nmodel           = nmodel ! number of models
  allocate(g_model%ele2model(nphys2))
- g_model%ele2model        = ele2model
+ g_model%ele2model        = ele2model ! conversion relation from element space to model space
  g_model%nphys2           = nphys2
  g_model%nphys1           = nphys1
  allocate(g_model%index(nphys2))
@@ -257,7 +372,7 @@ end do
  allocate(g_model%model2ele%stack(0:nmodel) )
  allocate(g_model%model2ele%item(nphys2))
  g_model%model2ele%nrow   = nmodel       ! 2017.06.05
- g_model%model2ele%ncolm  = ntet         ! 2017.06.05 max(item) = ntet
+ g_model%model2ele%ncolm  = ntet         ! 2017.06.05 max(item) = ntet 
  g_model%model2ele%ntot   = nphys2
  g_model%model2ele%stack  = stack
  g_model%model2ele%item   = item         ! id for element in whole element space
@@ -295,25 +410,57 @@ end if
 
 return
 end subroutine
+!#####################################################
+subroutine checkinoutinner(xyzcen,xdiv,ydiv,zdiv,nxdiv,nydiv,nzdiv,i1,j1,k1)
+implicit none
+integer(4),intent(in)  :: nxdiv,nydiv,nzdiv
+integer(4),intent(out) :: i1,j1,k1
+real(8),intent(in) :: xyzcen(3),xdiv(nxdiv),ydiv(nydiv),zdiv(nzdiv)
+integer(4) :: i,j,k
+
+!#[0]##
+i1=0;j1=0;k1=0
+
+!#[1]## 
+   if ( zdiv(1)  .lt. xyzcen(3) .and. xyzcen(3) .le. zdiv(nzdiv) .and. &
+      &  ydiv(1) .lt. xyzcen(2) .and. xyzcen(2) .le. ydiv(nydiv) .and. &
+      &  xdiv(1) .lt. xyzcen(1) .and. xyzcen(1) .le. xdiv(nxdiv) ) then ! inside the inner
+
+     do k=1,nzdiv-1
+       if ( zdiv(k) .lt. xyzcen(3) .and. xyzcen(3) .le. zdiv(k+1)) then
+         do j=1,nydiv-1
+           if ( ydiv(j) .lt. xyzcen(2) .and. xyzcen(2) .le. ydiv(j+1)) then
+             do i=1,nxdiv-1
+               if ( xdiv(i) .lt. xyzcen(1) .and. xyzcen(1) .le. xdiv(i+1)) then
+                 k1 = k ; j1 = j ; i1 = i
+                 goto 100
+     end if;end do;end if;end do; end if; end do
+     write(*,*) "GEGEGE not found xyzcen",xyzcen(1:3)
+     stop
+     100 continue
+   end if
+
+return
+end
 !##################################################### modelparam
 ! coded on 2017.08.28
 ! to show model parameter space
 subroutine modelparam(g_model)
 implicit none
 type(model),intent(inout) :: g_model
-integer(4) :: nmodel, i
-real(8)    :: z
+integer(4)                :: nmodel, i
+real(8)                   :: z
 
 !#[1]## set
 nmodel = g_model%nmodel
 
 !#[2]# output
-if ( .not. allocated(g_model%logrho_model) ) allocate(g_model%logrho_model(nmodel))
-call random_number(g_model%logrho_model(1:nmodel))
-do i=1,nmodel
- !# 0 - 1 -> 1 - 5
- g_model%logrho_model(i) = g_model%logrho_model(i) * 4. + 1.
-end do
+  if ( .not. allocated(g_model%logrho_model) ) allocate(g_model%logrho_model(nmodel))
+  call random_number(g_model%logrho_model(1:nmodel))
+  do i=1,nmodel
+       !# 0 - 1 -> 1 - 5
+   g_model%logrho_model(i) = g_model%logrho_model(i) * 4. + 1.
+  end do
 
 return
 end subroutine
@@ -408,16 +555,17 @@ h_cond%index     = g_model%index
 h_cond%condflag  = 1         ! 2017.05.18 (not homogeneous solid earth)
 h_cond%condfile  = condfile  ! 2017.05.18
 h_cond%sigma_air = sigma_air ! 2017.05.18
-write(*,*) size(logrho_model)
+!write(*,*) size(logrho_model) ! commented out on 2025.07.31
 do i=1,nphys2
 ! write(*,*) "i",i,ele2model(i),ele2model(i),logrho_model(ele2model(i))
- rho = 10.d0**logrho_model(ele2model(i))
- h_cond%rho(i) = rho
- h_cond%sigma(i) = 1.d0/rho
  if (present(iflag) .and. iflag .eq. 1 ) then         ! 2018.11.08
   rho = logrho_model(ele2model(i)) ! 2018.11.08
   h_cond%rho(i)   = rho            ! 2018.11.08
   h_cond%sigma(i) = 0.d0           ! 2018.11.08
+ else !2023.01.02 for default
+  rho = 10.d0**logrho_model(ele2model(i))
+  h_cond%rho(i) = rho
+  h_cond%sigma(i) = 1.d0/rho
  end if                            ! 2018.11.08
 end do
 
