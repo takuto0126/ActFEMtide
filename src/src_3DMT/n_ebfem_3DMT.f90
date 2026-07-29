@@ -41,13 +41,7 @@ character(1) ::num
 !#[1]## Mesh READ
  CALL READMESH_TOTAL(g_mesh,g_param_mt%g_meshfile) ! 3D mesh
  CALL READMESH_TOTAL(h_mesh,g_param_mt%z_meshfile) ! topography file
-
- !# For ActFEMtide with TMTGEM mesh 2027.07.29
- CALL READMESH_TOTAL(ki_mesh, g_param_mt%pokimsh)  ! 2021.07.27 read polygon_ki.msh
- CALL READKI23DPTR(g_param_mt,ki_mesh)             ! 2021.07.27 read ki23dptr.dat, generate g_param_mt%ki23dptr
- !# For ActFEMtide with TMTGEM mesh 2027.07.29
-
- CALL PREPZOBSMT(h_mesh,ki_mesh,g_param_mt) ! 2026.07.29 modification for ActFEMtide
+ CALL PREPZOBSMT(h_mesh,g_param_mt) ! 2026.07.29 modification for ActFEMtide
  CALL GENXYZMINMAX_MT(g_mesh,g_param_mt) ! generate xyzminmax 2021.12.15
   if (g_cond%condflag .eq. 1) then !"1" : conductivity file is given
    g_cond%ntet   = g_mesh%ntet
@@ -649,99 +643,77 @@ write(*,*) "### GENXYZMINMAX END!! ###"
 return
 end
 
-!########################################################### PREPZOBSMT
-! Modified for TMTGEM ocean mesh on 2026.07.29
-! Copied from volcano/3D_ana_comp/FEM_edge_bxyz_model/n_ebfem_bxyz.f90
-! on 2016.11.13
-! calcualte h_mesh%zobs from h_mesh%xyz
-subroutine PREPZOBSMT(em_mesh,h_mesh,g_param_mt) ! obs,iflag are excluded 2026.07.29
+!################################################################# PREPZOBSMT
+! modified based on PREPZOBSSRC in solver_mpi/n_ebfem_bxyz_mpi.f90 on 2026.07.29
+subroutine PREPZOBSMT(h_mesh,g_param_mt)
+use param_mt
 use mesh_type
-!use obs_type ! 2016.11.20 commented out 2026.07.29
-use matrix   ! 2016.11.20
-use triangle ! 2016.11.23 see m_triangle
-use param    ! 2016.11.23
-use triangle ! 2016.11.23
-use param_mt ! 2026.07.29
+use triangle
+use outresp
 implicit none
-type(mesh),         intent(in)    :: em_mesh,h_mesh ! em_mesh is 3-D mesh, h_mesh is 2-D mesh for ocean bottom
-type(param_forward_mt),intent(inout)     :: g_param_mt ! 2026.07.29
-!type(obs_info),     intent(inout) :: obs    ! commented out 2026.07.29
-!integer(4),         intent(in)    :: iflag ! 0: nothing, 1 for calculate coeff_vF for IXYHOUT
-real(8),            allocatable,dimension(:,:) :: xyz ! triangle,tetra nodes
-real(8),            allocatable,dimension(:,:) :: xyzobs
-integer(4),         allocatable,dimension(:,:) :: ki23dptr   ! ki23dptr(2,nodek) is the mapping from 2-D mesh to 3-D mesh, see polygon_ki.msh
-integer(4),         allocatable,dimension(:,:) :: n3k
-type(grid_list_type) :: glist
-integer(4)           :: ntri,nobs
-integer(4)           :: i,j,k,n1,n2,n3,m1,m2,m3,nx,ny,iele
-real(8),dimension(2) :: x12,x13,x23,v1,v2,v3
-real(8) :: a3(3),a,xyzminmax(6)
+type(mesh),             intent(in)    :: h_mesh
+type(param_forward_mt), intent(inout) :: g_param_mt
+type(grid_list_type)                  :: glist
+integer(4)                            :: nobs,nx,ny
+real(8),   allocatable,dimension(:,:) :: xyzobs,xyz
+integer(4),allocatable,dimension(:,:) :: n3k
+real(8),   allocatable,dimension(:)   :: znew
+real(8)    :: a3(3)
+integer(4) :: iele,n1,n2,n3,j,k,ntri,idev
+integer(4) :: nsr                                ! 2017.07.11
+real(8),allocatable,dimension(:,:)    :: xs1,xs2 ! 2017.07.18
+real(8)    :: xyzminmax(6)                       ! 2017.07.18
 
-!#[0]## set
-allocate( xyz(3,em_mesh%node),n3k(h_mesh%ntri,3) ) ! 2026.07.29
-allocate( xyzobs(3,g_param_mt%nobs)  )
-allocate( znew(g_param_mt%nobs) )
-nobs      = g_param_mt%nobs ! 2026.07.29
-xyz       = em_mesh%xyz   ! tetrahedral mesh
+!#[0]## cal xyzminmax of h_mesh
+!  CALL GENXYZMINMAX(h_mesh,g_param)  ! commented out  2017.10.12
+
+!#[1]## set
+nsr       = s_param%nsource     ! 2017.07.11
+allocate(xs1(3,nsr),xs2(3,nsr)) ! 2017.07.11
+allocate(xyz(3,h_mesh%node),n3k(h_mesh%ntri,3))
+allocate(xyzobs(3,g_param_mt%nobs))
+allocate(znew(g_param_mt%nobs))
+nobs      = g_param_mt%nobs
+xyz       = h_mesh%xyz    ! triangle mesh
 n3k       = h_mesh%n3
 ntri      = h_mesh%ntri
-xyzobs    = g_param_mt%xyzobs          ! 2026.07.29
-xyzminmax = g_param_mt%xyzminmax       ! 2027.07.29
-allocate(ki23dptr(2,g_param_mt%nodek)) ! 2026.07.29
-ki23dptr   = g_param_mt%ki23dptr       ! 2026.07.29
+xyzobs    = g_param_mt%xyzobs
+xs1       = s_param%xs1
+xs2       = s_param%xs2
+xyzminmax = g_param_mt%xyzminmax
 
-!#[1]## generate element list
-nx=200;ny=200
+
+!#[2]## cal z for nobsr
+nx=1000;ny=1000
 CALL allocate_2Dgrid_list(nx,ny,ntri,glist)   ! see m_mesh_type.f90
+write(*,*) "before gen2Dgridforlist in PREPZSRCOBS"
 CALL gen2Dgridforlist(xyzminmax,glist) ! see m_mesh_type.f90
 CALL classifytri2grd(h_mesh,glist)   ! classify ele to glist,see
 
-!#[1] search for the triangle including (x1,y1)
+
+!#[3] search for the triangle including (x1,y1)
+
+idev = free_unit()
+open(idev,file=trim(g_param%outputfolder)//"site.dat")! 2026.07.29
 do j=1,nobs
-  !write(*,*) "j",j,"x,y",xyzobs(1:2,j)
-  call findtriwithgrid(h_mesh,glist,xyzobs(1:2,j),iele,a3)
-  n1 = n3k(iele,1);  n2 = n3k(iele,2);  n3 = n3k(iele,3)
-  m1 = ki23dptr(2,n1) ! ocean bottom node ?
-  m2 = ki23dptr(2,n2)
-  m3 = ki23dptr(2,n3)
-  znew(j) = a3(1)*xyz(3,m1)+a3(2)*xyz(3,m2)+a3(3)*xyz(3,m3) - 0.001! 1m below seafloor
-
-  if ( .false. ) then ! for real observatories
-    write(*,*) "xyobs(1:2,j)=",xyzobs(1:2,j)
-    write(*,*) j,"/nobs",xyzobs(3,j),"->",g_param_mt%xyzobs(3,j),"[km]"
-  end if
-
+    call findtriwithgrid(h_mesh,glist,xyzobs(1:2,j),iele,a3)
+    n1 = n3k(iele,1); n2 = n3k(iele,2) ; n3 = n3k(iele,3)
+    znew(j) = a3(1)*xyz(3,n1)+a3(2)*xyz(3,n2)+a3(3)*xyz(3,n3) + xyzobs(3,j)
+!
+    write(*,*) "------------------------------------------"
+    write(*,'(i5,a,a)') j," site ID : ",trim(g_param%obsname(j))
+    write(*,'(a,2f12.5,a,f12.5,a)') "lon  lat",g_param%lonlataltobs(1:2,j), " alt",g_param%lonlataltobs(3,j)," [km]"
+    write(*,'(a,2f12.5,2(a,f12.5),a)') "  x    y",xyzobs(1:2,j), "   z",xyzobs(3,j)," -> ",znew(j)," [km]"
+    write(idev,'(i5,5f12.5,a)') j,g_param%lonlataltobs(1:2,j),xyzobs(1:3,j),trim(g_param%obsname(j))
 end do
+close(idev)
+    write(*,*)"-------------------------------------------"
+ 
 
 !#[4]## set znew to xyz_r
     g_param_mt%xyzobs(3,1:nobs) = znew(1:nobs)
+ 
 
-write(*,*) "### PREPZOBS END!! ###"
+write(*,*) "### PREPZOBSMT END ###"
 return
-end
-!################################################################### copied from tmtgem 2026.07.29
-!# coded and modified on 2026.07.29
-subroutine READKI23DPTR(g_param_mt,ki_mesh)
-use mesh_type
-use param_mt ! 2026.07.29
-implicit none
-type(mesh),          intent(in)    :: ki_mesh
-type(param_forward_mt), intent(inout) :: g_param_mt ! 2026.07.29
-integer(4)                         :: ndat,i
-
-g_param_mt%nodek = ki_mesh%node ! # of node in polygon_ki.msh
-allocate( g_param_mt%ki23dptr(2,g_param_mt%nodek) )
-
-open(1,file=g_param_mt%ki23dfile) ! 2026.07.29
- read(1,*) ndat
- if ( ndat .ne. ki_mesh%node ) goto 99
- do i=1,ndat
-  read(1,*) g_param_mt%ki23dptr(1:2,i) ! 2026.07.29
- end do
-close(1)
-
-return
-99 continue
-write(*,*) "GEGEGE! ndat=",ndat,"is not equal to nodek",g_param_mt%nodek
-stop
 end
