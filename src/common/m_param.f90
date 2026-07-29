@@ -605,12 +605,14 @@ write(*,'(a)') " ### CALOBSR END!! ###"
 return
 end subroutine
 !######################################################### UTMXY
+!# include coordinate rotation 2024.08.28
 !# Coded on 2016.10.12 by T.MINAMI
-subroutine UTMXY(lonlat,lonorigin,latorigin,xyout,zone)
+subroutine UTMXY(lonlat,lonorigin,latorigin,xyout,zone,angle) ! angle is added 2026.07.29
 implicit none
-real(8),intent(in) :: lonlat(2),lonorigin,latorigin
-character(3),intent(in) :: zone
-real(8) ,intent(out) :: xyout(2)
+real(8),          intent(in) :: lonlat(2),lonorigin,latorigin
+character(3),     intent(in) :: zone
+real(8) ,         intent(out) :: xyout(2)
+real(8),optional, intent(in) :: angle
 real(8) :: xorigin,yorigin,x,y
 
 call UTMGMT(lonlat(1),lonlat(2), x,       y,      zone,0)
@@ -621,10 +623,12 @@ call UTMGMT(lonorigin,latorigin, xorigin, yorigin,zone,0)
 xyout(1) = (x - xorigin)/1.d3 ! [km]
 xyout(2) = (y - yorigin)/1.d3 ! [km]
 
+if (present(angle)) call rotate(xyout(1),xyout(2),angle) ! 2024.08.28
 !write(*,*) "xout=",xout,"yout=",yout
 
 return
 end subroutine
+
 !######################################################### UTMGMT
 subroutine UTMGMT(xin,yin,xout,yout,zone,iflag)
 implicit none
