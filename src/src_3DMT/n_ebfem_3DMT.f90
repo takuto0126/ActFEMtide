@@ -104,7 +104,7 @@ CALL COND3DTO2D(g_mesh,g_surface,g_cond) ! see m_surface_type.f90 2021.06.01
 !#[9]## frequency loop
 do i = 1,nfreq
  freq  = g_param_mt%freq(i)
- write(*,*) "Freq",freq,"Hz" ! 2021.12.15
+ write(*,'(a,g15.7,a,g15.7,a)') "Freq",freq," Hz / Period",1./freq," sec" ! 2021.12.15
  omega = 2.*pi*freq
 
 !#[9-1]## prepare boundary condition by 2DMT calculation at each freq

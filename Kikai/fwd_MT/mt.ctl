@@ -26,7 +26,7 @@ header2d  (a50)    !nakadake2d
 header3d  (a50)    !nakadake3d
 # of frequency     !5
 Frequency [Hz]     !0.001d0
-Frequency [Hz]     |0.03d0
+Frequency [Hz]     |0.003d0
 Frequency [Hz]     !0.01d0
 Frequency [Hz]     !0.03d0
 Frequency [Hz]     !0.1d0
