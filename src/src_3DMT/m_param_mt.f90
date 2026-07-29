@@ -6,15 +6,15 @@ type param_forward_mt ! 2021.12.14
  ! mesh info
  integer(4)    :: itopoflag    ! 0: no topo, 1: topo are from topofiles 2017.09.29
  integer(4)    :: nfile        ! 2017.09.27
- character(50),allocatable,dimension(:)   :: topofile ! 2017.09.27
+ character(70),allocatable,dimension(:)   :: topofile ! 2017.09.27
  real(8),      allocatable,dimension(:,:) :: lonlatshift  ! 2017.09.27
- character(50) :: g_meshfile   ! global mesh file
+ character(70) :: g_meshfile   ! global mesh file
  integer(4)    :: surface_id_ground=6 ! surface consisting of triangles for ground
- character(50) :: z_meshfile    ! 2d triangle mesh file
- character(50) :: g_lineinfofile ! added on April 21, 2016
- character(50) :: outputfolder
- character(50) :: header2d
- character(50) :: header3d
+ character(70) :: z_meshfile    ! 2d triangle mesh file
+ character(70) :: g_lineinfofile ! added on April 21, 2016
+ character(70) :: outputfolder
+ character(70) :: header2d
+ character(70) :: header3d
  ! frequency info
  integer(4)    :: nfreq ! # of frequency for this
  real(8),allocatable,dimension(:)   :: freq ! frequencies
@@ -43,23 +43,23 @@ type param_forward_mt ! 2021.12.14
  real(8)                                  :: xbound(4),ybound(4),zbound(4)
  real(8),      allocatable,dimension(:,:) :: lonlataltobs!lon[deg],lat[deg],alt[km]
  real(8),      allocatable,dimension(:,:) :: xyzobs ! x eastward[km],y northward[km],z[km]
- character(50),allocatable,dimension(:)   :: obsname
+ character(70),allocatable,dimension(:)   :: obsname
  !# output spatial distribution 2017.10.11
  integer(4)    :: ixyflag      ! 0: nothing, 1: (nx,ny) surface values, 2: triangle surface
- character(50) :: xyfilehead   ! 2017.10.11 (ixyflag = 1 or 2)
+ character(70) :: xyfilehead   ! 2017.10.11 (ixyflag = 1 or 2)
  integer(4)    :: nx,ny        ! 2017.10.11 (ixyflag = 1     )
  !#
  real(8)       :: xyzminmax(6) ! added on 2017.02.21
  real(8)       :: zorigin=0.d0 ! added on 2017.02.21
  !# conductivity structure
- character(50) :: condfile
+ character(70) :: condfile
  integer(4)    :: condflag
  !########  rotation control  2024.08.28
  real(8)       :: angle  ! NdegE of x-axis originally points east 2024.08.28
 end type
 
 !type param_bell ! inserted on 2016.10.12 for Kusatsushirane
-! character(50) :: bellgeofile
+! character(70) :: bellgeofile
 ! integer(4) :: ilonlatflag ! 1 for lonlat, 2 for xy [km]
 ! real(8)  :: lon_bell, lat_bell
 ! real(8)  :: radius![km]

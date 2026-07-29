@@ -660,7 +660,6 @@ integer(4),allocatable,dimension(:,:) :: n3k
 real(8),   allocatable,dimension(:)   :: znew
 real(8)    :: a3(3)
 integer(4) :: iele,n1,n2,n3,j,k,ntri,idev
-integer(4) :: nsr                                ! 2017.07.11
 real(8),allocatable,dimension(:,:)    :: xs1,xs2 ! 2017.07.18
 real(8)    :: xyzminmax(6)                       ! 2017.07.18
 
@@ -668,8 +667,6 @@ real(8)    :: xyzminmax(6)                       ! 2017.07.18
 !  CALL GENXYZMINMAX(h_mesh,g_param)  ! commented out  2017.10.12
 
 !#[1]## set
-nsr       = s_param%nsource     ! 2017.07.11
-allocate(xs1(3,nsr),xs2(3,nsr)) ! 2017.07.11
 allocate(xyz(3,h_mesh%node),n3k(h_mesh%ntri,3))
 allocate(xyzobs(3,g_param_mt%nobs))
 allocate(znew(g_param_mt%nobs))
@@ -678,8 +675,6 @@ xyz       = h_mesh%xyz    ! triangle mesh
 n3k       = h_mesh%n3
 ntri      = h_mesh%ntri
 xyzobs    = g_param_mt%xyzobs
-xs1       = s_param%xs1
-xs2       = s_param%xs2
 xyzminmax = g_param_mt%xyzminmax
 
 
@@ -694,17 +689,17 @@ CALL classifytri2grd(h_mesh,glist)   ! classify ele to glist,see
 !#[3] search for the triangle including (x1,y1)
 
 idev = free_unit()
-open(idev,file=trim(g_param%outputfolder)//"site.dat")! 2026.07.29
+open(idev,file=trim(g_param_mt%outputfolder)//"site.dat")! 2026.07.29
 do j=1,nobs
     call findtriwithgrid(h_mesh,glist,xyzobs(1:2,j),iele,a3)
     n1 = n3k(iele,1); n2 = n3k(iele,2) ; n3 = n3k(iele,3)
     znew(j) = a3(1)*xyz(3,n1)+a3(2)*xyz(3,n2)+a3(3)*xyz(3,n3) + xyzobs(3,j)
 !
     write(*,*) "------------------------------------------"
-    write(*,'(i5,a,a)') j," site ID : ",trim(g_param%obsname(j))
-    write(*,'(a,2f12.5,a,f12.5,a)') "lon  lat",g_param%lonlataltobs(1:2,j), " alt",g_param%lonlataltobs(3,j)," [km]"
+    write(*,'(i5,a,a)') j," site ID : ",trim(g_param_mt%obsname(j))
+    write(*,'(a,2f12.5,a,f12.5,a)') "lon  lat",g_param_mt%lonlataltobs(1:2,j), " alt",g_param_mt%lonlataltobs(3,j)," [km]"
     write(*,'(a,2f12.5,2(a,f12.5),a)') "  x    y",xyzobs(1:2,j), "   z",xyzobs(3,j)," -> ",znew(j)," [km]"
-    write(idev,'(i5,5f12.5,a)') j,g_param%lonlataltobs(1:2,j),xyzobs(1:3,j),trim(g_param%obsname(j))
+    write(idev,'(i5,5f12.5,a)') j,g_param_mt%lonlataltobs(1:2,j),xyzobs(1:3,j),trim(g_param_mt%obsname(j))
 end do
 close(idev)
     write(*,*)"-------------------------------------------"

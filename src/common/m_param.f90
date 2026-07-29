@@ -605,6 +605,26 @@ write(*,'(a)') " ### CALOBSR END!! ###"
 
 return
 end subroutine
+!######################################################### Equidistant Cylindrical Projection (ECP)
+! added on 2025.06.09
+subroutine ECPXY(lonlat,lonorigin,latorigin,xyout,angle)
+implicit none
+real(8),          intent(in) :: lonlat(2),lonorigin,latorigin
+real(8) ,         intent(out) :: xyout(2)
+real(8),optional, intent(in) :: angle
+real(8) :: xorigin,yorigin,x,y,dlat
+integer(4) :: i
+
+dlat=latorigin*d2r
+xyout(1)= planetrad * cos(dlat)*(lonlat(1) - lonorigin)*d2r ! eastward [km]
+xyout(2)= planetrad *           (lonlat(2) - latorigin)*d2r ! northward [km]
+
+if (present(angle)) call rotate(xyout(1),xyout(2),angle) ! 2025.06.09
+!write(*,*) "xout=",xout,"yout=",yout
+
+return
+end subroutine
+
 !######################################################### UTMXY
 !# include coordinate rotation 2024.08.28
 !# Coded on 2016.10.12 by T.MINAMI
