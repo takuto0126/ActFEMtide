@@ -50,25 +50,35 @@ P18 pha data       !   9 ../fwd/data_inv/P18_tide_pha.dat
 imp: 0, 1:amp,pha  !0
 unit:1Ohm,2mV/km/nT!2
 MT errfloor SSQ*   !0.01
-# of observatories |9
-P10 impedance      !   1 ../fwd_MT/result/P10_MT_imp.dat
-P11 impedance      !   2 ../fwd_MT/result/P11_MT_imp.dat
-P12 impedance      !   3 ../fwd_MT/result/P12_MT_imp.dat
-P13 impedance      !   4 ../fwd_MT/result/P13_MT_imp.dat
-P14 impedance      !   5 ../fwd_MT/result/P14_MT_imp.dat
-P15 impedance      !   6 ../fwd_MT/result/P15_MT_imp.dat
-P16 impedance      !   7 ../fwd_MT/result/P16_MT_imp.dat
-P17 impedance      !   8 ../fwd_MT/result/P17_MT_imp.dat
-P18 impedance      !   9 ../fwd_MT/result/P18_MT_imp.dat
-P10 impedance err  !   1 ../fwd_MT/data_inv/P10_MT_imp_err.dat
-P11 impedance err  !   2 ../fwd_MT/data_inv/P11_MT_imp_err.dat
-P12 impedance err  !   3 ../fwd_MT/data_inv/P12_MT_imp_err.dat
-P13 impedance err  !   4 ../fwd_MT/data_inv/P13_MT_imp_err.dat
-P14 impedance err  !   5 ../fwd_MT/data_inv/P14_MT_imp_err.dat
-P15 impedance err  !   6 ../fwd_MT/data_inv/P15_MT_imp_err.dat
-P16 impedance err  !   7 ../fwd_MT/data_inv/P16_MT_imp_err.dat
-P17 impedance err  !   8 ../fwd_MT/data_inv/P17_MT_imp_err.dat
-P18 impedance err  !   9 ../fwd_MT/data_inv/P18_MT_imp_err.dat
+# of observatories |14
+P5  impedance      !   1 ../fwd_MT/result/P5_MT_imp.dat
+P6  impedance      !   2 ../fwd_MT/result/P6_MT_imp.dat
+P7  impedance      !   3 ../fwd_MT/result/P7_MT_imp.dat
+P8  impedance      !   4 ../fwd_MT/result/P8_MT_imp.dat
+P9  impedance      !   5 ../fwd_MT/result/P9_MT_imp.dat
+P10 impedance      !   6 ../fwd_MT/result/P10_MT_imp.dat
+P11 impedance      !   7 ../fwd_MT/result/P11_MT_imp.dat
+P12 impedance      !   8 ../fwd_MT/result/P12_MT_imp.dat
+P13 impedance      !   9 ../fwd_MT/result/P13_MT_imp.dat
+P14 impedance      !  10 ../fwd_MT/result/P14_MT_imp.dat
+P15 impedance      !  11 ../fwd_MT/result/P15_MT_imp.dat
+P16 impedance      !  12 ../fwd_MT/result/P16_MT_imp.dat
+P17 impedance      !  13 ../fwd_MT/result/P17_MT_imp.dat
+P18 impedance      !  14 ../fwd_MT/result/P18_MT_imp.dat
+P5  impedance err  !   1 ../fwd_MT/data_inv/P5_MT_imp_err.dat
+P6  impedance err  !   2 ../fwd_MT/data_inv/P6_MT_imp_err.dat
+P7  impedance err  !   3 ../fwd_MT/data_inv/P7_MT_imp_err.dat
+P8  impedance err  !   4 ../fwd_MT/data_inv/P8_MT_imp_err.dat
+P9  impedance err  !   5 ../fwd_MT/data_inv/P9_MT_imp_err.dat
+P10 impedance err  !   6 ../fwd_MT/data_inv/P10_MT_imp_err.dat
+P11 impedance err  !   7 ../fwd_MT/data_inv/P11_MT_imp_err.dat
+P12 impedance err  !   8 ../fwd_MT/data_inv/P12_MT_imp_err.dat
+P13 impedance err  !   9 ../fwd_MT/data_inv/P13_MT_imp_err.dat
+P14 impedance err  !  10 ../fwd_MT/data_inv/P14_MT_imp_err.dat
+P15 impedance err  !  11 ../fwd_MT/data_inv/P15_MT_imp_err.dat
+P16 impedance err  !  12 ../fwd_MT/data_inv/P16_MT_imp_err.dat
+P17 impedance err  !  13 ../fwd_MT/data_inv/P17_MT_imp_err.dat
+P18 impedance err  !  14 ../fwd_MT/data_inv/P18_MT_imp_err.dat
 ########################################################################
 iflag_tipper       !0
 ## icombine = 0: normal
