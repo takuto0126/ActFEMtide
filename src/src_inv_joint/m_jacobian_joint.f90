@@ -322,7 +322,7 @@ type(watch)                             :: t_watch          ! see m_caltime.f90 
 
      !#[2-2]## Second term from i * omega * mu * sigma * int{ sigma w cdot w }dv {Bsl}
      !# [4-1] ## assemble coefficient for i * omega*
-     if ( h_mesh%n4flag(iele,1) .lt. 2 ) goto 99 ! in the case of not in land
+     if ( h_mesh%n4flag(iele,2) .lt. 3 ) goto 99 ! in the case of not in land 2026.07.30
      RM    = g_model%logrho_model(imodel) ! log10(rho)
      sigma = 10**(-RM)                     ! sigma = 1/10**(log10(rho)) = 10**(-M)
      !   write(*,*) "imodel=",imodel,"sigma=",sigma,"RM=",RM
@@ -407,7 +407,7 @@ return
 !# error #
 99 continue
    write(*,*) "GEGEGE air region is included in nmodel. imodel=",imodel
-   write(*,*) "iele=",iele,"h_mesh%n4flag(iele,1)=",h_mesh%n4flag(iele,1)
+   write(*,*) "iele=",iele,"h_mesh%n4flag(iele,2)=",h_mesh%n4flag(iele,2)
    do j=1,4
     write(*,*) "node=",h_mesh%n4(iele,j),"elm_xyz=",elm_xyz(1:3,j)
    end do
@@ -570,7 +570,7 @@ subroutine genjacobian1_mt(TIP,nobs_mt,nline,ut_mt,bs_mt,PT_mt,g_model,h_mesh,&
 
          !#[1-2-2]## Second term from i * omega * mu * sigma * int{ sigma w cdot w }dv {Bsl}
            !# [4-1] ## assemble coefficient for i * omega*
-           if ( h_mesh%n4flag(iele,1) .lt. 2 ) goto 99 ! in the case of not in land
+           if ( h_mesh%n4flag(iele,2) .lt. 3 ) goto 99 ! in the case of not in land 2026.07.30
            RM    = g_model%logrho_model(imodel) ! log10(rho)
            sigma = 10**(-RM) ! sigma = 1/10**(log10(rho)) = 10**(-M)
            !   write(*,*) "imodel=",imodel,"sigma=",sigma,"RM=",RM
@@ -752,7 +752,7 @@ subroutine genjacobian1_mt(TIP,nobs_mt,nline,ut_mt,bs_mt,PT_mt,g_model,h_mesh,&
  !# error #
  99 continue
  write(*,*) "GEGEGE air region is included in nmodel. imodel=",imodel
- write(*,*) "iele=",iele,"h_mesh%n4flag(iele,1)=",h_mesh%n4flag(iele,1)
+ write(*,*) "iele=",iele,"h_mesh%n4flag(iele,2)=",h_mesh%n4flag(iele,2)
  do j=1,4
   write(*,*) "node=",h_mesh%n4(iele,j),"elm_xyz=",elm_xyz(1:3,j)
  end do

@@ -34,6 +34,7 @@ program inversion_joint
  type(param_joint)      :: g_param_joint! see m_param_jointinv.f90 ! 2021.12.25
  type(mesh)             :: g_mesh       ! see m_mesh_type.f90
  type(mesh)             :: h_mesh       ! z file; see m_mesh_type.f90
+ type(mesh)             :: ocean_mesh   ! ocean.msh to get nodes 2026.07.30
  type(line_info)        :: g_line       ! see m_line_type.f90
  type(face_info)        :: g_face       ! see m_line_type.f90
  type(modelpara)        :: g_modelpara  ! see m_modelpart.f90
@@ -55,7 +56,7 @@ program inversion_joint
  type(real_crs_matrix)  :: coeffobs(2,3)! see m_matrix.f90 ; 1 for edge, 2 for face
  integer(4)                                  :: ijoint ! 1:ACTIVE, 2: MT, 3: Joint 2022.10.14
  logical                                     :: MT=.false., ACT=.false., TIP=.false. ! 2026.03.03
- integer(4)                                  :: ite,i,j,k,errno,node
+ integer(4)                                  :: ite,i,j,k,errno,node,nodes ! nodes is added 2026.07.30
  integer(4)                                  :: nline, ntet, nobs_act, ndat ! 2017.08.31
  integer(4)                                  :: ndat_mt                 ! 2022.01.04
  integer(4)                                  :: nsr_inv, nmodel         ! 2017.09.04
@@ -197,6 +198,10 @@ if ( ip .eq. 0) then !################################################# ip = 0
     if (ACT) then
        CALL READMESH_TOTAL(g_mesh,g_param%g_meshfile)
        CALL READMESH_TOTAL(h_mesh,g_param%z_meshfile)
+       CALL READMESH_TOTAL(ocean_mesh,g_param%ocean_meshfile) ! 2026.07.30
+         g_param%nodes = ocean_mesh%node ! nodes is necessary to read fxyz and vxyz files ! 2026.07.30
+       call killmesh(ocean_mesh)                      ! 2026.07.30
+
     else 
        CALL READMESH_TOTAL(g_mesh,g_param_mt%g_meshfile)
        CALL READMESH_TOTAL(h_mesh,g_param_mt%z_meshfile);end if

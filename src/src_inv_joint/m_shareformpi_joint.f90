@@ -347,6 +347,8 @@ subroutine sharefparam(g_param,ip)
  call MPI_BCAST(g_param%condfile,   50, MPI_CHAR,    0,MPI_COMM_WORLD,errno)
  call MPI_BCAST(g_param%condflag,    1, MPI_INTEGER4,0,MPI_COMM_WORLD,errno)
 
+ call MPI_BCAST(g_param%nodes,       1, MPI_INTEGER4,0,MPI_COMM_WORLD,errno) ! 2026.07.30
+
 
  if (ip .eq. 0 ) write(*,'(a)') " ### SHAREFPARAM   END!! ###" ! 2020.09.17
  return
