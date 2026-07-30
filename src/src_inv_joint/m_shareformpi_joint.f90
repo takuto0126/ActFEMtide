@@ -117,16 +117,14 @@ subroutine SHAREINVPARAJOINT(g_param_joint,ip) ! 2017.08.31
   call MPI_BCAST(g_param_joint%obsinfo(j)%nobs_s,1,MPI_INTEGER4, 0,MPI_COMM_WORLD,errno) !2017.08.31
   nobs_s = g_param_joint%obsinfo(j)%nobs_s                ! 2017.08.31
   if ( ip .ne. 0) then                                    ! 2017.08.31
-   allocate(g_param_joint%obsinfo(j)%ampfile(5,nobs_s) )  ! 2018.10.04
-   allocate(g_param_joint%obsinfo(j)%phafile(5,nobs_s) )  ! 2018.10.04
-   allocate(g_param_joint%obsinfo(j)%obsindex(2,5,nobs_s))! 2018.10.04
+   allocate(g_param_joint%obsinfo(j)%ampfile5(nobs_s) )   ! 2026.07.30
+   allocate(g_param_joint%obsinfo(j)%phafile5(nobs_s) )   ! 2026.07.30
+   allocate(g_param_joint%obsinfo(j)%obsindex(2,nobs_s))  ! 2026.07.30
   end if                                                  ! 2017.08.31
-  do icomp = 1,5                                          ! 2018.10.04
   do i=1,nobs_s                                           ! 2017.08.31
-  call MPI_BCAST(g_param_joint%obsinfo(j)%ampfile(icomp,i),50,MPI_CHAR, 0,MPI_COMM_WORLD,errno)     !2018.10.04
-  call MPI_BCAST(g_param_joint%obsinfo(j)%phafile(icomp,i),50,MPI_CHAR, 0,MPI_COMM_WORLD,errno)     !2018.10.04
-  call MPI_BCAST(g_param_joint%obsinfo(j)%obsindex(1,icomp,i),2,MPI_INTEGER4,0,MPI_COMM_WORLD,errno)!2018.10.04
-  end do         ! 2017.07.13
+  call MPI_BCAST(g_param_joint%obsinfo(j)%ampfile5(i),50,MPI_CHAR, 0,MPI_COMM_WORLD,errno)     !2026.07.30
+  call MPI_BCAST(g_param_joint%obsinfo(j)%phafile5(i),50,MPI_CHAR, 0,MPI_COMM_WORLD,errno)     !2026.07.30
+  call MPI_BCAST(g_param_joint%obsinfo(j)%obsindex(1,i),2,MPI_INTEGER4,0,MPI_COMM_WORLD,errno) !2026.07.30
   end do         ! 2018.10.04
  end do          ! 2017.07.13
 
@@ -279,16 +277,16 @@ subroutine sharefparam(g_param,ip)
    allocate(g_param%topofile(nfile))      ! 2017.12.13
    allocate(g_param%lonlatshift(2,nfile)) ! 2017.12.13
   end if                                  ! 2017.12.13
-  call MPI_BCAST(g_param%topofile,  nfile*50, MPI_CHAR,   0,MPI_COMM_WORLD,errno)! 2017.12.13
+  call MPI_BCAST(g_param%topofile,  nfile*70, MPI_CHAR,   0,MPI_COMM_WORLD,errno)! 2017.12.13
   call MPI_BCAST(g_param%lonlatshift,nfile*2, MPI_REAL8,  0,MPI_COMM_WORLD,errno)! 2017.12.13
  end if                                  ! 2017.09.29
- call MPI_BCAST(g_param%g_meshfile,    50, MPI_CHAR,0,MPI_COMM_WORLD,errno)
+ call MPI_BCAST(g_param%g_meshfile,    70, MPI_CHAR,0,MPI_COMM_WORLD,errno)
  call MPI_BCAST(g_param%surface_id_ground, 1, MPI_INTEGER4,0,MPI_COMM_WORLD,errno)
- call MPI_BCAST(g_param%z_meshfile,    50, MPI_CHAR,0,MPI_COMM_WORLD,errno)
- call MPI_BCAST(g_param%g_lineinfofile,50, MPI_CHAR,0,MPI_COMM_WORLD,errno)
- call MPI_BCAST(g_param%outputfolder,  50, MPI_CHAR,0,MPI_COMM_WORLD,errno)
- call MPI_BCAST(g_param%header2d,      50, MPI_CHAR,0,MPI_COMM_WORLD,errno)
- call MPI_BCAST(g_param%header3d,      50, MPI_CHAR,0,MPI_COMM_WORLD,errno)
+ call MPI_BCAST(g_param%z_meshfile,    70, MPI_CHAR,0,MPI_COMM_WORLD,errno)
+ call MPI_BCAST(g_param%g_lineinfofile,70, MPI_CHAR,0,MPI_COMM_WORLD,errno)
+ call MPI_BCAST(g_param%outputfolder,  70, MPI_CHAR,0,MPI_COMM_WORLD,errno)
+ call MPI_BCAST(g_param%header2d,      70, MPI_CHAR,0,MPI_COMM_WORLD,errno)
+ call MPI_BCAST(g_param%header3d,      70, MPI_CHAR,0,MPI_COMM_WORLD,errno)
 
  call MPI_BCAST(g_param%nfreq,          1, MPI_INTEGER4,0,MPI_COMM_WORLD,errno)
  nfreq = g_param%nfreq
@@ -339,16 +337,18 @@ subroutine sharefparam(g_param,ip)
  end if
  call MPI_BCAST(g_param%lonlataltobs,3*nobs, MPI_REAL8,0,MPI_COMM_WORLD,errno)
  call MPI_BCAST(g_param%xyzobs,      3*nobs, MPI_REAL8,0,MPI_COMM_WORLD,errno)
- call MPI_BCAST(g_param%obsname,    50*nobs, MPI_CHAR, 0,MPI_COMM_WORLD,errno)
+ call MPI_BCAST(g_param%obsname,    70*nobs, MPI_CHAR, 0,MPI_COMM_WORLD,errno)
 
  call MPI_BCAST(g_param%xyzminmax,   6, MPI_REAL8,0,MPI_COMM_WORLD,errno)
  call MPI_BCAST(g_param%zorigin,     1, MPI_REAL8,0,MPI_COMM_WORLD,errno)
 
- call MPI_BCAST(g_param%condfile,   50, MPI_CHAR,    0,MPI_COMM_WORLD,errno)
+ call MPI_BCAST(g_param%condfile,   70, MPI_CHAR,    0,MPI_COMM_WORLD,errno)
  call MPI_BCAST(g_param%condflag,    1, MPI_INTEGER4,0,MPI_COMM_WORLD,errno)
 
  call MPI_BCAST(g_param%nodes,       1, MPI_INTEGER4,0,MPI_COMM_WORLD,errno) ! 2026.07.30
-
+ call MPI_BCAST(g_param%vxyz_file,  70, MPI_CHAR,    0,MPI_COMM_WORLD,errno) ! 2026.07.30
+ call MPI_BCAST(g_param%fxyz_file,  70, MPI_CHAR,    0,MPI_COMM_WORLD,errno) ! 2026.07.30
+ 
 
  if (ip .eq. 0 ) write(*,'(a)') " ### SHAREFPARAM   END!! ###" ! 2020.09.17
  return

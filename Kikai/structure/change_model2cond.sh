@@ -41,22 +41,42 @@ cd -
 
 
 
-#[6]##  homogeneous resisticity input, depth cuboid specification
-: << 'COMMENT' # comment out until COMMENT 2027.07.23
-cat > change_cond.ctl <<EOF
+#[6]##  true resisticity input, depth cuboid specification
+cat > cond_test.ctl <<EOF
 !------10!-------20!----
 input 3d mshfile   !../mesh/em3d.msh
 0homo,1cond,2model !0
 homo resistivity   !100.0
 output cond        !./cond_test.msh
 0:elevation,1:depth!0
+# of cuboid        !2
+1  xminmax [km]    !  -50.0          -10.0
+1  yminmax [km]    !  -50.2          50.2
+1 minmax z [km]    !  -50.0          -5.0
+2  rho    [Ohm.m]  ! 10.0
+2  xminmax [km]    !  10.0           50.0
+2  yminmax [km]    !  -50.2          50.2
+2 minmax z [km]    !  -50.0          -5.0
+2 rho              ! 1000.0
+EOF
+
+#[6]##  true resisticity input, depth cuboid specification
+cat > cond_homo.ctl <<EOF
+!------10!-------20!----
+input 3d mshfile   !../mesh/em3d.msh
+0homo,1cond,2model !0
+homo resistivity   !100.0
+output cond        !./cond_homo.msh
+0:elevation,1:depth!0
 # of cuboid        !1
 1  xminmax [km]    !  -50.0          50.0
 1  yminmax [km]    !  -50.2          50.2
-minmax depth [km]  !  -50.3           0.1
+1 minmax z [km]    !  -50.0          -5.0
 1  rho    [Ohm.m]  ! 100.0
 EOF
-COMMENT
 
-${SRC}/change_model2cond.exe < change_cond.ctl
+${SRC}/change_model2cond.exe < cond_test.ctl
+
+${SRC}/change_model2cond.exe < cond_homo.ctl
+
 #./gmtslice_change.sh

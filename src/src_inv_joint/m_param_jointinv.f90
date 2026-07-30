@@ -458,19 +458,12 @@ subroutine readparaJOINTINV(g_param_joint,g_modelpara,g_param,sparam,g_param_mt,
      allocate(g_param_joint%obsinfo(i)%phafile5(nobs_s))      ! 2026.07.30
      allocate(g_param_joint%obsinfo(i)%obsindex(2,nobs_s))    ! 2026.07.30
 
-     !do icomp = 1,5                                           ! commented out 2026.07.30
-     !  if ( g_param_joint%iflag_comp(icomp) .eq. 1 ) then     ! commented out 2026.07.30
-         !# number of amp and phase files should be the same, i.e. nobs_s.
-         do j=1,nobs_s !  amplitude files for i-th source 2017.08.31
-           read(input,'(20x,i5,a)') g_param_joint%obsinfo(i)%obsindex(1,j),&
-				   &   g_param_joint%obsinfo(i)%ampfile5(j) ! 2026.07.30
-         end do ! nobs_s loop
-         do j=1,nobs_s !  phase     files for i-th source 2017.08.31
-           read(input,'(20x,i5,a)') g_param_joint%obsinfo(i)%obsindex(2,j),&
-				   &   g_param_joint%obsinfo(i)%phafile5(j) ! 2026.07.30
-      !   end do ! nobs_s loop  ! commented out 2026.07.30
-      ! end if                  ! commented out 2026.07.30
-     end do ! component loop 2018.10.04
+      do j=1,nobs_s !  amplitude files for i-th source 2017.08.31
+        read(input,'(20x,i5,a)') g_param_joint%obsinfo(i)%obsindex(1,j),g_param_joint%obsinfo(i)%ampfile5(j) ! 2026.07.30
+      end do ! nobs_s loop
+      do j=1,nobs_s !  phase     files for i-th source 2017.08.31
+        read(input,'(20x,i5,a)') g_param_joint%obsinfo(i)%obsindex(2,j),g_param_joint%obsinfo(i)%phafile5(j) ! 2026.07.30
+      end do ! nobs_s loop  ! commented out 2026.07.30
 
    end do   ! nsr_inv loop
    call readdata_ap(g_param,sparam,g_param_joint,g_data_ap) ! 2018.10.04 read active data
@@ -981,27 +974,24 @@ subroutine readdata_ap(g_param,sparam,g_param_joint,g_data_ap)
  !#[2-1]## just read ! 2017.08.31
  do k=1,nsr_inv
    nobs_s = g_param_joint%obsinfo(k)%nobs_s
-   !do icomp = 1,5            ! commented out 2026.07.30
-   !  if ( iflag_comp(icomp) .eq. 0 ) cycle ! 2018.10.04 read only components with iflag_comp = 1 commented out 2026.07.30
      do i=1, nobs_s            ! 2017.07.13
        open(1,file=g_param_joint%obsinfo(k)%ampfile5(i)) ! 2026.07.30
        open(2,file=g_param_joint%obsinfo(k)%phafile5(i)) ! 2026.07.30
-       !  write(*,*) "file=",g_param_joint%obsinfo(k)%ampfile(i)
-       !  write(*,*) "file=",g_param_joint%obsinfo(k)%phafile(i)
+       !  write(*,*) "file=",g_param_joint%obsinfo(k)%ampfile5(i)
+       !  write(*,*) "file=",g_param_joint%obsinfo(k)%phafile5(i)
        iobs1 = g_param_joint%obsinfo(k)%obsindex(1,i)   ! 2026.07.30
        iobs2 = g_param_joint%obsinfo(k)%obsindex(2,i)   ! 2026.07.30
        do j=1,nfreq ! amp  ! 2018.06.26
          !   write(*,*) "j,i,k",j,i,k,"iobs=",iobs
-         read(1,*) f1,iflag(1,1:5,j,iobs1,k),dd(1,1:5,j,iobs1,k),ee(1,icomp,j,iobs1,k)!amp,2017.08.31
-         !   write(*,'(f15.7,i5,2f15.7)') f1,iflag(1,icomp,j,iobs1,k),dd(1,icomp,j,iobs1,k),ee(1,icomp,j,iobs1,k)!amp,2017.08.31
+         read(1,*) f1,iflag(1,1:5,j,iobs1,k),dd(1,1:5,j,iobs1,k),ee(1,1:5,j,iobs1,k) !amp,2026.07.30
+         !write(*,'(f15.7,5i5,10f15.7)') f1,iflag(1,1:5,j,iobs1,k),dd(1,1:5,j,iobs1,k),ee(1,1:5,j,iobs1,k) !amp,2026.07.30
        end do
        do j=1,nfreq ! phase ! 2018.06.26
-         read(2,*) f1,iflag(2,icomp,j,iobs2,k),dd(2,icomp,j,iobs2,k),ee(2,icomp,j,iobs2,k)!pha,2017.08.31
-         !   write(*,'(f15.7,i5,2f15.7)') f1,iflag(2,icomp,j,iobs2,k),dd(2,icomp,j,iobs2,k),ee(2,icomp,j,iobs2,k)!pha,2017.08.31
+         read(2,*) f1,iflag(2,1:5,j,iobs2,k),dd(2,1:5,j,iobs2,k),ee(2,1:5,j,iobs2,k)!pha,2026.07.30
+         !write(*,'(f15.7,5i5,10f15.7)') f1,iflag(2,1:5,j,iobs2,k),dd(2,1:5,j,iobs2,k),ee(2,1:5,j,iobs2,k)!pha,2026.07.30
        end do
        close(1) ; close(2) ! 2017.08.31
      end do ! nobs_s   loop
-   !end do ! comp loop   commented out 2026.07.30
  end do  ! nsr_inv loop
 
  !#[2-2]## assemble data vec 2018.10.04
@@ -1015,7 +1005,7 @@ subroutine readdata_ap(g_param,sparam,g_param_joint,g_data_ap)
        do icomp = 1,5                          ! 2018.10.04
          if ( iflag_comp(icomp) .eq. 0 ) cycle  ! 2018.10.04
          do l=1,2 ! 1 for amp, 2 for phase      ! 2017.08.31
-           iobs = g_param_joint%obsinfo(k)%obsindex(l,icomp,i) ! 2018.10.04
+           iobs = g_param_joint%obsinfo(k)%obsindex(l,i) ! 2026.07.30
            if ( iflag(l,icomp,j,iobs,k) .eq. 1 ) then   ! 2018.10.04
              data_avail(l,icomp,j,iobs,k) = .true.       ! 2018.10.04
              icount = icount + 1                   ! 2017.07.13
@@ -1063,7 +1053,7 @@ subroutine readdata_ap(g_param,sparam,g_param_joint,g_data_ap)
        do icomp = 1,5                          ! 2018.10.04
          if ( iflag_comp(icomp) .eq. 0 ) cycle  ! 2018.10.04
          do l=1,2 ! 1 for amp, 2 for phase ! 2017.08.31
-           iobs = g_param_joint%obsinfo(k)%obsindex(l,icomp,i) ! 2018.10.04
+           iobs = g_param_joint%obsinfo(k)%obsindex(l,i) ! 2018.10.04
            if (data_avail(l,icomp,j,iobs,k)) then       ! 2018.10.04
              icount = icount + 1                   ! 2017.07.13 do i=1,ndat
              write(*,10) icount,"obs#",i,trim(g_param%obsname(i)),comp(icomp),ap(l),"dat,err=",dat(icount),err(icount),"src", k,"freq",j
@@ -1088,7 +1078,7 @@ subroutine readdata_ap(g_param,sparam,g_param_joint,g_data_ap)
  do icomp = 1,5 ! 2018.10.04
   if ( iflag_comp(icomp) .eq. 0 ) cycle ! 2018.10.04
  do l=1,2
-   iobs  = g_param_joint%obsinfo(k)%obsindex(l,icomp,i) ! 2018.10.04
+   iobs  = g_param_joint%obsinfo(k)%obsindex(l,i) ! 2018.10.04
    site  = g_param%obsname(iobs)
    nsite = len_trim(site)
    apfile=head(1:nhead)//site(1:nsite)//"_"//sour(1:nsour)//"_"//comp(icomp)//ap(l)//num(1:2)//".dat"

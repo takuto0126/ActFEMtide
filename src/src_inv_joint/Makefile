@@ -1,7 +1,7 @@
 # Coded on Dec 25, 2015 by T. MINAMI
 
-#FC=mpiifort    # for poseidon
-FC=mpiifx
+FC=mpiifort    # for poseidon
+#FC=mpiifx
 VPATH= ../common ../solver  ../src_inv/ ../common_mpi ../src_3DMT/ ../src_2D ../src_tide/
 
 # for poseidon/triton
