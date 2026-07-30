@@ -11,9 +11,11 @@ module param_jointinv
 
 type obs_src          ! 2017.08.31
  integer(4) :: nobs_s ! nobs for one source 2017.07.13
- character(50),allocatable,dimension(:,:)   :: ampfile ! (5,nobs)   2018.10.04
- character(50),allocatable,dimension(:,:)   :: phafile ! (5,nobs)   2017.10.04
- integer(4),   allocatable,dimension(:,:,:) :: obsindex! (2,5,nobs) 2017.10.04
+ !character(50),allocatable,dimension(:,:)   :: ampfile ! (5,nobs)   2018.10.04
+ !character(50),allocatable,dimension(:,:)   :: phafile ! (5,nobs)   2017.10.04
+ character(50),allocatable,dimension(:) :: ampfile5 ! (nobs) 2026.07.30 consisting of 5 component data
+ character(50),allocatable,dimension(:) :: phafile5 ! (nobs) 2026.07.30 consisting of 5 component data
+ integer(4),   allocatable,dimension(:,:) :: obsindex! (2,5,nobs) -> (2,nobs) 2026.07.30
  end type              ! 2017.08.31
 
 type obs_mt ! 2021.12.27
@@ -424,7 +426,7 @@ subroutine readparaJOINTINV(g_param_joint,g_modelpara,g_param,sparam,g_param_mt,
    !################################################################ read iflag_comp(5)
    write(*,*) "" ! 2020.09.29
    write(*,40) " <Input 0 or 1 for use of Bx,By,Bz,Ex,Ey component as (5i2)>"   ! 2018.10.04
-   write(*,40) " <When 1 is chosen for a component, you should supply data file for all src & site>"
+   write(*,40) " <When 1 is chosen for a component, ActFEMtide assumes that at least one data is providedyou should supply data file for all src & site>" ! 2026.07.30
    read(input,'(20x,5i2)') g_param_joint%iflag_comp(1:5)                        ! 2018.10.04
 
    !################################################################  read  errorfloor_act
@@ -452,22 +454,22 @@ subroutine readparaJOINTINV(g_param_joint,g_modelpara,g_param,sparam,g_param_mt,
      write(*,*) "Source",i,"nobs_s :",nobs_s                  ! 2018.06.25
      if ( g_param_joint%nobs .lt. nobs_s) goto 100
      g_param_joint%obsinfo(i)%nobs_s = nobs_s                 ! 2017.07.13
-     allocate(g_param_joint%obsinfo(i)%ampfile(5,nobs_s))     ! 2018.10.04
-     allocate(g_param_joint%obsinfo(i)%phafile(5,nobs_s))     ! 2018.10.04
-     allocate(g_param_joint%obsinfo(i)%obsindex(2,5,nobs_s))  ! 2018.10.04
+     allocate(g_param_joint%obsinfo(i)%ampfile5(nobs_s))      ! 2026.07.30
+     allocate(g_param_joint%obsinfo(i)%phafile5(nobs_s))      ! 2026.07.30
+     allocate(g_param_joint%obsinfo(i)%obsindex(2,nobs_s))    ! 2026.07.30
 
-     do icomp = 1,5                                           ! 2018.10.04
-       if ( g_param_joint%iflag_comp(icomp) .eq. 1 ) then     ! 2018.10.04 for comp to be used
+     !do icomp = 1,5                                           ! commented out 2026.07.30
+     !  if ( g_param_joint%iflag_comp(icomp) .eq. 1 ) then     ! commented out 2026.07.30
          !# number of amp and phase files should be the same, i.e. nobs_s.
          do j=1,nobs_s !  amplitude files for i-th source 2017.08.31
-           read(input,'(20x,i5,a)') g_param_joint%obsinfo(i)%obsindex(1,icomp,j),&
-				   &   g_param_joint%obsinfo(i)%ampfile(icomp,j) ! 2018.10.04
+           read(input,'(20x,i5,a)') g_param_joint%obsinfo(i)%obsindex(1,j),&
+				   &   g_param_joint%obsinfo(i)%ampfile5(j) ! 2026.07.30
          end do ! nobs_s loop
          do j=1,nobs_s !  phase     files for i-th source 2017.08.31
-           read(input,'(20x,i5,a)') g_param_joint%obsinfo(i)%obsindex(2,icomp,j),&
-				   &   g_param_joint%obsinfo(i)%phafile(icomp,j) ! 2018.10.04
-         end do ! nobs_s loop
-       end if
+           read(input,'(20x,i5,a)') g_param_joint%obsinfo(i)%obsindex(2,j),&
+				   &   g_param_joint%obsinfo(i)%phafile5(j) ! 2026.07.30
+      !   end do ! nobs_s loop  ! commented out 2026.07.30
+      ! end if                  ! commented out 2026.07.30
      end do ! component loop 2018.10.04
 
    end do   ! nsr_inv loop
@@ -979,18 +981,18 @@ subroutine readdata_ap(g_param,sparam,g_param_joint,g_data_ap)
  !#[2-1]## just read ! 2017.08.31
  do k=1,nsr_inv
    nobs_s = g_param_joint%obsinfo(k)%nobs_s
-   do icomp = 1,5            ! 2018.10.04
-     if ( iflag_comp(icomp) .eq. 0 ) cycle        ! 2018.10.04 read only components with iflag_comp = 1
+   !do icomp = 1,5            ! commented out 2026.07.30
+   !  if ( iflag_comp(icomp) .eq. 0 ) cycle ! 2018.10.04 read only components with iflag_comp = 1 commented out 2026.07.30
      do i=1, nobs_s            ! 2017.07.13
-       open(1,file=g_param_joint%obsinfo(k)%ampfile(icomp,i)) ! 2018.10.04
-       open(2,file=g_param_joint%obsinfo(k)%phafile(icomp,i)) ! 2018.10.04
+       open(1,file=g_param_joint%obsinfo(k)%ampfile5(i)) ! 2026.07.30
+       open(2,file=g_param_joint%obsinfo(k)%phafile5(i)) ! 2026.07.30
        !  write(*,*) "file=",g_param_joint%obsinfo(k)%ampfile(i)
        !  write(*,*) "file=",g_param_joint%obsinfo(k)%phafile(i)
-       iobs1 = g_param_joint%obsinfo(k)%obsindex(1,icomp,i)   ! 2018.10.04
-       iobs2 = g_param_joint%obsinfo(k)%obsindex(2,icomp,i)   ! 2018.10.04
+       iobs1 = g_param_joint%obsinfo(k)%obsindex(1,i)   ! 2026.07.30
+       iobs2 = g_param_joint%obsinfo(k)%obsindex(2,i)   ! 2026.07.30
        do j=1,nfreq ! amp  ! 2018.06.26
          !   write(*,*) "j,i,k",j,i,k,"iobs=",iobs
-         read(1,*) f1,iflag(1,icomp,j,iobs1,k),dd(1,icomp,j,iobs1,k),ee(1,icomp,j,iobs1,k)!amp,2017.08.31
+         read(1,*) f1,iflag(1,1:5,j,iobs1,k),dd(1,1:5,j,iobs1,k),ee(1,icomp,j,iobs1,k)!amp,2017.08.31
          !   write(*,'(f15.7,i5,2f15.7)') f1,iflag(1,icomp,j,iobs1,k),dd(1,icomp,j,iobs1,k),ee(1,icomp,j,iobs1,k)!amp,2017.08.31
        end do
        do j=1,nfreq ! phase ! 2018.06.26
@@ -999,7 +1001,7 @@ subroutine readdata_ap(g_param,sparam,g_param_joint,g_data_ap)
        end do
        close(1) ; close(2) ! 2017.08.31
      end do ! nobs_s   loop
-   end do ! comp loop     2018.10.04
+   !end do ! comp loop   commented out 2026.07.30
  end do  ! nsr_inv loop
 
  !#[2-2]## assemble data vec 2018.10.04
