@@ -2,10 +2,10 @@
 # added mkline
 
 FC=gfortran
-#FC=ifort
+FC=ifort
 VPATH = ../common
-#OPT=-O -fpe0 -check bounds -traceback -g
-OPT=-O3
+OPT=-O -fpe0 -check bounds -traceback -g
+#OPT=-O3
 all: coastline mshki2ocean extrude mk3dgeo combine3d mkline msh2spherical
 
 ## coastline.exe

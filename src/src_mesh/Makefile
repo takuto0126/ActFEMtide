@@ -7,7 +7,7 @@
 #OPT=-i-dynamic
 FC=gfortran
 #OPT= -O -fpe0 -check bounds -traceback -g  -mkl=parallel
-FC=ifort
+FC=ifx
 OPT= -O
 OPT= -mkl=parallel -fpe0 -check bounds -traceback -g
 VPATH = ../common

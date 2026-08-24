@@ -1,7 +1,8 @@
 *.dat
 *.pos
 *.geo
-*.msh 
+*.msh
+*.log
 mshki2ocean.ctl 
 topo.xyz
 topo.grd 
