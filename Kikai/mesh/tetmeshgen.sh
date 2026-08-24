@@ -39,7 +39,7 @@ ${sdir}/extrude.exe < ${ctl}
 ${sdir}/mk3dgeo.exe < ${ctl}
 
 #gmsh pre3d.geo $OPT -3 -format msh2
-gmsh pre3d.geo $OPT -3 -bgm bgmesh3d.pos -format msh2
+gmsh pre3d.geo $OPT -3 -bgm bgmesh3d.pos -format msh2 > mesh3d.log 2>&1
 
 #[6]## combine3d.f90
 ${sdir}/combine3d.exe < ${ctl}

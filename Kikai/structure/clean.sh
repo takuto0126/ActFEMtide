@@ -1,3 +1,5 @@
 #!/bin/bash
 
-rm *.msh
+rm *.msh *.dat *.pdf
+rm tmp.ctl
+rm gmt.conf
