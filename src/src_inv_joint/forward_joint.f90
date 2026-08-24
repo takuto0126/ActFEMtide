@@ -68,7 +68,7 @@ iflag_comp = g_param_joint%iflag_comp ! 2018.10.05
 CALL INITIALIZE_JOINT(ACT,MT,A,rf,rf_mt,bs,bs_mt,nline,nsr) ! nsr is added 2021.12.29
 
 !#[4-2]## Generate Matrix for CRS format: set A and rf (ACTIVE rhs vector)
-CALL GENMAT(h_mesh,l_line,A,rf,omega,sparam,g_param,g_cond,g_param_joint) ! 2026.07.30
+CALL GENMAT(h_mesh,l_line,A,rf,omega,sparam,g_param,g_cond,g_param_joint,ACT,MT) ! 2026.07.30
 
 !#[4-3]## Copy upper triangle to lower driangle
 CALL COPY_UL_ICCG12(A,ip) ! 2021.10.04
@@ -375,7 +375,7 @@ SUBROUTINE SET_BC_3DJoint(A,nline,nsr,rf,rf_mt,dvalue,dvalue_mt,dirichlet,ip)
   ! modified on 2017.08.31 for amp phase multiple sources
   ! Coded on March 4, 2016
   ! replace integration by tetrai_table by analytical integration
-  subroutine GENMAT(h_mesh,l_line,A,rf,omega,sparam,g_param,g_cond,g_param_joint)
+  subroutine GENMAT(h_mesh,l_line,A,rf,omega,sparam,g_param,g_cond,g_param_joint,ACT,MT)
   use  outerinnerproduct
   use  iccg_var_takuto ! rf is not included, see m_iccg_var_takuto.f90
   use  mesh_type       ! see m_mesh_type.f90
@@ -388,6 +388,7 @@ SUBROUTINE SET_BC_3DJoint(A,nline,nsr,rf,rf_mt,dvalue,dvalue_mt,dirichlet,ip)
   use  m_param_ana,    only:cond,istructure ! see m_param_ana.f90
   use  readFvxyz       ! src_tide/m_readfvxyz.f90 2026.07.30
   implicit none
+  logical,intent(in) :: ACT,MT
   type(mesh),             intent(in)    :: h_mesh
   type(line_info),        intent(in)    :: l_line
   type(param_forward),    intent(in)    :: g_param
@@ -425,11 +426,11 @@ SUBROUTINE SET_BC_3DJoint(A,nline,nsr,rf,rf_mt,dvalue,dvalue_mt,dirichlet,ip)
   real(8)                               :: F(3)              ! 2026.07.30
 
   node  = h_mesh%node    ! node for em3d.msh    2026.07.30 based on solver_mpi/forward_bxyz_mpi.f90
-  nodes = g_param%nodes  ! node for ocean_meesh 2026.07.30 based on solver_mpi/forward_bxyz_mpi.f90
-  allocate(vxyz(3,node),fxyz(3,node)) !         2026.07.30 based on solver_mpi/forward_bxyz_mpi.f90
+  if (ACT) nodes = g_param%nodes  ! node for ocean_meesh 2026.07.30 based on solver_mpi/forward_bxyz_mpi.f90
+  if (ACT) allocate(vxyz(3,node),fxyz(3,node)) !         2026.07.30 based on solver_mpi/forward_bxyz_mpi.f90
     
-  call readfxyz(nodes,node,fxyz,g_param%fxyz_file) ! 2026.07.30
-  call readvxyz(nodes,node,vxyz,g_param%vxyz_file) ! 2026.07.30
+  if (ACT) call readfxyz(nodes,node,fxyz,g_param%fxyz_file) ! 2026.07.30
+  if (ACT) call readvxyz(nodes,node,vxyz,g_param%vxyz_file) ! 2026.07.30
 
   !#[0]## set
     !nsr_inv  = g_param_joint%nsr_inv   ! 2017.08.31
@@ -543,34 +544,33 @@ SUBROUTINE SET_BC_3DJoint(A,nline,nsr,rf,rf_mt,dvalue,dvalue_mt,dirichlet,ip)
     !end do  ! nsr_inv loop, 2017.07.13
     j = h_mesh%n4flag(iele,2)
     S2(1:6)=(0,0)
-    if ( j .eq. 2 )then ! when iele is included in ocean mesh
-
-    do i=1,4     ! mean v*F in the tetrahedral element
-      no(i)=h_mesh%n4(iele,i)
-      F(1:3)=fxyz(1:3,no(i))  !*(cos(pi/2)+inum*sin(pi/2))!(nT)
-      vF(1:3,i) = cr_outer(vxyz(1:3,no(i)),F(1:3)) ![m/s]*[nT]=[nV/m]
-      ! vF(1:3,i) = inner_r(vxyz(1:3,no(i)),F(1:3))
-      ! vF(1:3,i)=(0.00000000001,0.00000000000001)
-    end do
-    !   write(*,*) "vF(1:3,1)",vF(1:3,1)
-    elementnode=4
-    do i=1,6
-      k=kl(i,1);l=kl(i,2)
-      do j=1,4
-        S2(i) = S2(i)+dmu*sigma*(intv(k,j,v)*rc_inner(gn(:,l),vF(:,j)) &
+    if ( j .eq. 2 .and. ACT )then ! when iele is included in ocean mesh
+     do i=1,4     ! mean v*F in the tetrahedral element
+       no(i)=h_mesh%n4(iele,i)
+       F(1:3)=fxyz(1:3,no(i))  !*(cos(pi/2)+inum*sin(pi/2))!(nT)
+       vF(1:3,i) = cr_outer(vxyz(1:3,no(i)),F(1:3)) ![m/s]*[nT]=[nV/m]
+       ! vF(1:3,i) = inner_r(vxyz(1:3,no(i)),F(1:3))
+       ! vF(1:3,i)=(0.00000000001,0.00000000000001)
+     end do
+     !   write(*,*) "vF(1:3,1)",vF(1:3,1)
+     elementnode=4
+     do i=1,6
+       k=kl(i,1);l=kl(i,2)
+       do j=1,4
+         S2(i) = S2(i)+dmu*sigma*(intv(k,j,v)*rc_inner(gn(:,l),vF(:,j)) &
             &    -  intv(l,j,v)*rc_inner(gn(:,k),vF(:,j)))*idirection(i)*(1.d+3)  !m/s-->>>mm/s
-        !  S2(i)=(0.1,0.1)
-      end do
-    end do
-    end if ! only in the ocean
+         !  S2(i)=(0.1,0.1)
+       end do
+     end do
+     !# [6] ## set right hand side vector, b_vec  ########################
+     do i=1,6                                 ! 2026.07.30
+       ii=l_line%n6line(iele,i)*idirection(i) ! 2026.07.30
+       !b_vec(ii,1) = b_vec(ii,1)+S2(i)!(mV/km)! 2026.07.30
+       rf(ii,1) = rf(ii,1)+S2(i)!(mV/km)! 2026.07.30
+     end do
 
-    !# [6] ## set right hand side vector, b_vec  ########################
-  !write(6,*)iele
-  do i=1,6                                 ! 2026.07.30
-    ii=l_line%n6line(iele,i)*idirection(i) ! 2026.07.30
-    !b_vec(ii,1) = b_vec(ii,1)+S2(i)!(mV/km)! 2026.07.30
-    rf(ii,1) = rf(ii,1)+S2(i)!(mV/km)! 2026.07.30
-  end do
+    end if ! only in the ocean and ACT (Tide)
+
 
   end do ! element loop end
 
