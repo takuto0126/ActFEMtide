@@ -2,13 +2,13 @@
 # slice.exe is added on 2017.12.20
 # Coded on August 15, 2015 by T. MINAMI
 
-#FC=gfortran
-FC=ifort
+FC=gfortran
+FC=ifx
 MPIFC=mpif90
 #OPT=-i-dynamic
 VPATH = ./ ../common ../src_mesh
-#OPT0= -O3 -xAVX -mkl=parallel
-OPT0= -O -fpe0 -check bounds -traceback -g -qmkl=parallel
+OPT0= -O3 -xAVX -qmkl=parallel
+#OPT0= -O -fpe0 -check bounds -traceback -g -qmkl=parallel
 
 #2016.03.03 solver with many modules
 
