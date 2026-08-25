@@ -80,3 +80,5 @@ ${SRC}/change_model2cond.exe < cond_test.ctl
 ${SRC}/change_model2cond.exe < cond_homo.ctl
 
 #./gmtslice_change.sh
+rm cond_homo.ctl
+rm cond_test.ctl
