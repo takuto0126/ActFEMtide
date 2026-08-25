@@ -9,7 +9,7 @@ init cond file     !../structure/cond_homo.msh
 output folder      |./result_inv/
 Roughness type     |1
 1:L,2:Cl,3:Mi,4:Gr !2
-alpha init         !1000.
+alpha init         !100.
 factor(10^factor)  !-0.25
 iflag_replace 0,1  |0
 ## iboundflag can set upper and lower limit of the conductivity value in inversion
