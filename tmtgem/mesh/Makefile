@@ -1,8 +1,8 @@
 # modified on Sep 12, 2016
 # added mkline
 
-FC=gfortran
-FC=ifort
+#FC=gfortran
+FC=ifx
 VPATH = ../common
 OPT=-O -fpe0 -check bounds -traceback -g
 #OPT=-O3

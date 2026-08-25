@@ -24,6 +24,7 @@ cd -
 
 #[2]## gmsh polygonki.geo
 gmsh ${head}ki.geo $OPT -2 -format msh2 -bgm bgmesh.pos
+rm bgmesh.pos
 #gmsh ${head}ki.msh  >& /dev/null &
 
 #[3]## mshki2ocean.f90, to extract horizontal ocean mesh
