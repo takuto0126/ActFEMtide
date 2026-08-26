@@ -4,7 +4,7 @@ source /opt/intel/oneapi/setvars.sh --force
 
 src=../../src/src_inv_joint
 cd $src
-#make clean
+make clean
 make
 cd -
 
