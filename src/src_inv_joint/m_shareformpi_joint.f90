@@ -30,12 +30,15 @@ subroutine sharejointinv(g_param,sparam,g_cond,g_mesh,g_line,g_param_joint,g_mod
  !type(face_info),    intent(inout) :: g_face
  type(param_joint), intent(inout) :: g_param_joint ! 2017.08.31
  type(model),          intent(inout) :: g_model
+ logical   :: ACT,MT,TIP             ! 2026.08.26
 
  !  write(*,*) "### SHAREAPINV START ###"
-  CALL SHAREFORWARD(g_param,sparam,g_cond,ip) ! see m_shareformpi.f90
-  CALL SHAREMESHLINE(g_mesh,g_line,ip)        ! see m_shareformpi.f90
+ !CALL SHAREFORWARD(g_param,sparam,g_cond,ip) ! see m_shareformpi.f90 commented out 2026.08.26
+ CALL SHAREMESHLINE(g_mesh,g_line,ip)        ! see m_shareformpi.f90
  !  CALL SHAREFACE(g_face,ip)                  ! see m_shareformpi.f90 2017.08.31
   CALL SHAREINVPARAJOINT(g_param_joint,ip)    ! 2017.08.31 see below
+  CALL setnec(g_param_joint,ACT,MT,TIP)       ! 2026.08.26
+  CALL SHAREFORWARD(g_param,sparam,g_cond,ip,ACT) ! see m_shareformpi.f90 2026.08.26
   CALL SHAREMODEL(g_model,ip)                 ! see m_shareformpi.f90
   if (ip .eq. 0) write(*,'(a)') " ### SHAREJOINTINV  END!! ###" ! 2026.03.03
  return
@@ -244,16 +247,17 @@ subroutine shareface(g_face,ip)
  end
 
 !############################################################
-subroutine shareforward(g_param,sparam,g_cond,ip)
+subroutine shareforward(g_param,sparam,g_cond,ip,ACT) ! 2026.08.26 ACT is added
  implicit none
  integer(4),intent(in) :: ip
+ logical, intent(in)   :: ACT ! 2026.08.26
  type(param_source), intent(inout) :: sparam
  type(param_forward),intent(inout) :: g_param
  type(param_cond),   intent(inout) :: g_cond
 
  call sharecond(g_cond,ip)
- call sharesource(sparam,ip) ! 2017.09.04
- call sharefparam(g_param,ip)
+ if (ACT) call sharesource(sparam,ip)  ! 2026.08.26
+ if (ACT) call sharefparam(g_param,ip) ! 2026.08.26
 
  if (ip .eq. 0 ) write(*,'(a)') " ### SHAREFORWARD  END!! ###" ! 2020.09.17
 

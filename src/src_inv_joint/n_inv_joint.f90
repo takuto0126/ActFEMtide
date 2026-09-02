@@ -671,6 +671,7 @@ end do ! alpha loop end! 2017.09.08
  10 format(a,i3,a,i3,a,f8.3,a) !2022.01.04
 
 contains
+
 !###################################################################
 ! 2025.09.19
 subroutine setinitialrms(nrms0,nrms_mt0,nrms_tip0,nrms,nrms_mt,nrms_tip)
