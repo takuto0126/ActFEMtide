@@ -92,7 +92,7 @@ boundary top       !100.0
 EOF
 
 #[2]## generate tmp.dat
-if [ $igendat -eq 0 ];then
+if [ $igendat -eq 1 ];then
 SRC="../../src/src_post2"
 cd $SRC
 make clean

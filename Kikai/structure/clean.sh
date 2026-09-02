@@ -3,3 +3,4 @@
 rm *.msh *.dat *.pdf
 rm tmp.ctl
 rm gmt.conf
+rm obs_xyz.dat
