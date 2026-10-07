@@ -9,7 +9,7 @@ init cond file     !../structure/cond_homo.msh
 output folder      |./result_inv/
 Roughness type     |1
 1:L,2:Cl,3:Mi,4:Gr !2
-alpha init         !1000.
+alpha init         !100.
 factor(10^factor)  !-0.25
 iflag_replace 0,1  |0
 ## iboundflag can set upper and lower limit of the conductivity value in inversion
@@ -86,47 +86,63 @@ iflag_tipper       !0
 ## icombine = 2: integrate the outside blocks to one and fix the modelparameter with given cond
 ## icombine = -1: inner outer mode
 icombine:0,1,2:fix !1
-19
+27
 -250.0
 -150.0
 -100.0
 -80.0
+-70.0
 -60.0
--40.0
--30.0
--20.0
--10.0
+-50.0
+-42.0
+-35.0
+-28.0
+-21.0
+-14.0
+-7.0
 0.0
-10.0
-20.0
-30.0
-40.0
+7.0
+14.0
+21.0
+28.0
+35.0
+42.0
+50.0
 60.0
+70.0
 80.0
 100.0
 150.0
 250.0
-19
+27
 -250.0
 -150.0
 -100.0
 -80.0
+-70.0
 -60.0
--40.0
--30.0
--20.0
--10.0
+-50.0
+-42.0
+-35.0
+-28.0
+-21.0
+-14.0
+-7.0
 0.0
-10.0
-20.0
-30.0
-40.0
+7.0
+14.0
+21.0
+28.0
+35.0
+42.0
+50.0
 60.0
+70.0
 80.0
 100.0
 150.0
 250.0
-24
+27
 -350.0
 -300.0
 -250.0
@@ -144,7 +160,10 @@ icombine:0,1,2:fix !1
 -20.0
 -17.0
 -14.0
+-12.0
 -11.0
+-10.0
+-9.0
 -8.0
 -6.0
 -4.0
