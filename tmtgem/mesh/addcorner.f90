@@ -61,6 +61,7 @@ integer(4)                               :: i,j,ii,jj,lpoly2
 logical                                  :: iflag_topright_land  ! 2020.05.29
 integer(4)                               :: is,ie,istart_polygon ! 2019.02.21
 real(8),    allocatable                  :: xpoly_work(:,:),ypoly_work(:,:) !2022.03.01
+integer(4), allocatable                  :: lpoly_work(:) ! 2026.10.10
 
 !#[0]## set input
  node   = g_grd%node
@@ -193,13 +194,14 @@ real(8),    allocatable                  :: xpoly_work(:,:),ypoly_work(:,:) !202
   write(*,*) "size(xpoly(:,1))",size(xpoly(:,1)) ! xpoly(lpmax,ncmax)
   xpoly_work = xpoly ! 2022.03.02
   ypoly_work = ypoly ! 2022.03.02
+  lpoly_work = lpoly ! 2026.10.10
   do i=1,lpoly0-nclose
   xpoly(1+i: 1+ lpoly0 - nclose,:) = xpoly_work(nclose+i:lpoly0,:) ! 20200805
   ypoly(1+i: 1+ lpoly0 - nclose,:) = ypoly_work(nclose+i:lpoly0,:) ! 20200805
 !  lpoly(1+i: 1+ lpoly0 - nclose  ) = lpoly(nclose+i:lpoly0  ) ! 20200805
 !   xpoly(1+i,:)=xpoly(nclose+i,:) ! 2021.05.24
 !   ypoly(1+i,:)=ypoly(nclose+i,:) ! 2021.05.24
-    lpoly(1+i  )=lpoly(nclose+i  ) ! 2021.05.24
+    lpoly(1+i  )=lpoly_work(nclose+i  ) ! 2026.10.10 in-place copy gave lpoly(i+1)=lpoly(1) for all i when nclose=0
   end do
   if ( lpoly0 - nclose +2 .le. h_poly%lpmax ) then ! set zero for nul space
    xpoly(lpoly0-nclose+2:h_poly%lpmax,:) = 0.d0
