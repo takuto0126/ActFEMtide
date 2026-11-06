@@ -8,3 +8,4 @@
 gmt.conf
 pull.sh
 pullresult.sh
+.DS_store
