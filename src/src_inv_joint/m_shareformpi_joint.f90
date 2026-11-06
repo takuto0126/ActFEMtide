@@ -211,7 +211,7 @@ subroutine sharecomplexcrsmatrix(rmat,ip_from,ip)
   
    call MPI_BCAST(rmat%stack(0),nrow+1, MPI_INTEGER4,ip_from,MPI_COMM_WORLD,errno)
    call MPI_BCAST(rmat%item(1),   ntot, MPI_INTEGER4,ip_from,MPI_COMM_WORLD,errno)
-   call MPI_BCAST(rmat%val(1),    ntot, MPI_COMPLEX8,ip_from,MPI_COMM_WORLD,errno)!2022.01.05
+   call MPI_BCAST(rmat%val(1),    ntot, MPI_COMPLEX16,ip_from,MPI_COMM_WORLD,errno)!2022.01.05 MPI_COMPLEX8 (tanseido complex) -> MPI_COMPLEX16 (doble precision) 2026.11.06
   
   return
   end
