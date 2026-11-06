@@ -26,59 +26,59 @@ iflag_replace 0,1  |0
 ##Act err floor [0-1]!0.01
 ##index of source(S1)!1
 ### of obesrvatories !9
-##P10 amp data       !   1 ../fwd/data_inv/P10_tide_amp.dat
-##P11 amp data       !   2 ../fwd/data_inv/P11_tide_amp.dat
-##P12 amp data       !   3 ../fwd/data_inv/P12_tide_amp.dat
-##P13 amp data       !   4 ../fwd/data_inv/P13_tide_amp.dat
-##P14 amp data       !   5 ../fwd/data_inv/P14_tide_amp.dat
-##P15 amp data       !   6 ../fwd/data_inv/P15_tide_amp.dat
-##P16 amp data       !   7 ../fwd/data_inv/P16_tide_amp.dat
-##P17 amp data       !   8 ../fwd/data_inv/P17_tide_amp.dat
-##P18 amp data       !   9 ../fwd/data_inv/P18_tide_amp.dat
+##P10 amp data       !   1 ../fwd_tide/data_inv/P10_tide_amp.dat
+##P11 amp data       !   2 ../fwd_tide/data_inv/P11_tide_amp.dat
+##P12 amp data       !   3 ../fwd_tide/data_inv/P12_tide_amp.dat
+##P13 amp data       !   4 ../fwd_tide/data_inv/P13_tide_amp.dat
+##P14 amp data       !   5 ../fwd_tide/data_inv/P14_tide_amp.dat
+##P15 amp data       !   6 ../fwd_tide/data_inv/P15_tide_amp.dat
+##P16 amp data       !   7 ../fwd_tide/data_inv/P16_tide_amp.dat
+##P17 amp data       !   8 ../fwd_tide/data_inv/P17_tide_amp.dat
+##P18 amp data       !   9 ../fwd_tide/data_inv/P18_tide_amp.dat
 ## phase
-##P10 pha data       !   1 ../fwd/data_inv/P10_tide_pha.dat
-##P11 pha data       !   2 ../fwd/data_inv/P11_tide_pha.dat
-##P12 pha data       !   3 ../fwd/data_inv/P12_tide_pha.dat
-##P13 pha data       !   4 ../fwd/data_inv/P13_tide_pha.dat
-##P14 pha data       !   5 ../fwd/data_inv/P14_tide_pha.dat
-##P15 pha data       !   6 ../fwd/data_inv/P15_tide_pha.dat
-##P16 pha data       !   7 ../fwd/data_inv/P16_tide_pha.dat
-##P17 pha data       !   8 ../fwd/data_inv/P17_tide_pha.dat
-##P18 pha data       !   9 ../fwd/data_inv/P18_tide_pha.dat
+##P10 pha data       !   1 ../fwd_tide/data_inv/P10_tide_pha.dat
+##P11 pha data       !   2 ../fwd_tide/data_inv/P11_tide_pha.dat
+##P12 pha data       !   3 ../fwd_tide/data_inv/P12_tide_pha.dat
+##P13 pha data       !   4 ../fwd_tide/data_inv/P13_tide_pha.dat
+##P14 pha data       !   5 ../fwd_tide/data_inv/P14_tide_pha.dat
+##P15 pha data       !   6 ../fwd_tide/data_inv/P15_tide_pha.dat
+##P16 pha data       !   7 ../fwd_tide/data_inv/P16_tide_pha.dat
+##P17 pha data       !   8 ../fwd_tide/data_inv/P17_tide_pha.dat
+##P18 pha data       !   9 ../fwd_tide/data_inv/P18_tide_pha.dat
 ## MT data #############################################################
 ## initial version support only impedance data 2021.12.13
 imp: 0, 1:amp,pha  !0
 unit:1Ohm,2mV/km/nT!2
 MT errfloor SSQ*   !0.03
 # of observatories |14
-P5  impedance      !   1 ../fwd_MT/result/P5_MT_imp.dat
-P6  impedance      !   2 ../fwd_MT/result/P6_MT_imp.dat
-P7  impedance      !   3 ../fwd_MT/result/P7_MT_imp.dat
-P8  impedance      !   4 ../fwd_MT/result/P8_MT_imp.dat
-P9  impedance      !   5 ../fwd_MT/result/P9_MT_imp.dat
-P10 impedance      !   6 ../fwd_MT/result/P10_MT_imp.dat
-P11 impedance      !   7 ../fwd_MT/result/P11_MT_imp.dat
-P12 impedance      !   8 ../fwd_MT/result/P12_MT_imp.dat
-P13 impedance      !   9 ../fwd_MT/result/P13_MT_imp.dat
-P14 impedance      !  10 ../fwd_MT/result/P14_MT_imp.dat
-P15 impedance      !  11 ../fwd_MT/result/P15_MT_imp.dat
-P16 impedance      !  12 ../fwd_MT/result/P16_MT_imp.dat
-P17 impedance      !  13 ../fwd_MT/result/P17_MT_imp.dat
-P18 impedance      !  14 ../fwd_MT/result/P18_MT_imp.dat
-P5  impedance err  !   1 ../fwd_MT/data_inv/P5_MT_imp_err.dat
-P6  impedance err  !   2 ../fwd_MT/data_inv/P6_MT_imp_err.dat
-P7  impedance err  !   3 ../fwd_MT/data_inv/P7_MT_imp_err.dat
-P8  impedance err  !   4 ../fwd_MT/data_inv/P8_MT_imp_err.dat
-P9  impedance err  !   5 ../fwd_MT/data_inv/P9_MT_imp_err.dat
-P10 impedance err  !   6 ../fwd_MT/data_inv/P10_MT_imp_err.dat
-P11 impedance err  !   7 ../fwd_MT/data_inv/P11_MT_imp_err.dat
-P12 impedance err  !   8 ../fwd_MT/data_inv/P12_MT_imp_err.dat
-P13 impedance err  !   9 ../fwd_MT/data_inv/P13_MT_imp_err.dat
-P14 impedance err  !  10 ../fwd_MT/data_inv/P14_MT_imp_err.dat
-P15 impedance err  !  11 ../fwd_MT/data_inv/P15_MT_imp_err.dat
-P16 impedance err  !  12 ../fwd_MT/data_inv/P16_MT_imp_err.dat
-P17 impedance err  !  13 ../fwd_MT/data_inv/P17_MT_imp_err.dat
-P18 impedance err  !  14 ../fwd_MT/data_inv/P18_MT_imp_err.dat
+P5  impedance      !   1 ../fwd_mt/result/P5_MT_imp.dat
+P6  impedance      !   2 ../fwd_mt/result/P6_MT_imp.dat
+P7  impedance      !   3 ../fwd_mt/result/P7_MT_imp.dat
+P8  impedance      !   4 ../fwd_mt/result/P8_MT_imp.dat
+P9  impedance      !   5 ../fwd_mt/result/P9_MT_imp.dat
+P10 impedance      !   6 ../fwd_mt/result/P10_MT_imp.dat
+P11 impedance      !   7 ../fwd_mt/result/P11_MT_imp.dat
+P12 impedance      !   8 ../fwd_mt/result/P12_MT_imp.dat
+P13 impedance      !   9 ../fwd_mt/result/P13_MT_imp.dat
+P14 impedance      !  10 ../fwd_mt/result/P14_MT_imp.dat
+P15 impedance      !  11 ../fwd_mt/result/P15_MT_imp.dat
+P16 impedance      !  12 ../fwd_mt/result/P16_MT_imp.dat
+P17 impedance      !  13 ../fwd_mt/result/P17_MT_imp.dat
+P18 impedance      !  14 ../fwd_mt/result/P18_MT_imp.dat
+P5  impedance err  !   1 ../fwd_mt/data_inv/P5_MT_imp_err.dat
+P6  impedance err  !   2 ../fwd_mt/data_inv/P6_MT_imp_err.dat
+P7  impedance err  !   3 ../fwd_mt/data_inv/P7_MT_imp_err.dat
+P8  impedance err  !   4 ../fwd_mt/data_inv/P8_MT_imp_err.dat
+P9  impedance err  !   5 ../fwd_mt/data_inv/P9_MT_imp_err.dat
+P10 impedance err  !   6 ../fwd_mt/data_inv/P10_MT_imp_err.dat
+P11 impedance err  !   7 ../fwd_mt/data_inv/P11_MT_imp_err.dat
+P12 impedance err  !   8 ../fwd_mt/data_inv/P12_MT_imp_err.dat
+P13 impedance err  !   9 ../fwd_mt/data_inv/P13_MT_imp_err.dat
+P14 impedance err  !  10 ../fwd_mt/data_inv/P14_MT_imp_err.dat
+P15 impedance err  !  11 ../fwd_mt/data_inv/P15_MT_imp_err.dat
+P16 impedance err  !  12 ../fwd_mt/data_inv/P16_MT_imp_err.dat
+P17 impedance err  !  13 ../fwd_mt/data_inv/P17_MT_imp_err.dat
+P18 impedance err  !  14 ../fwd_mt/data_inv/P18_MT_imp_err.dat
 ########################################################################
 iflag_tipper       !0
 ## icombine = 0: normal
