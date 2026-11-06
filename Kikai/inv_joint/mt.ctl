@@ -1,1 +1,1 @@
-../fwd_MT/mt.ctl
+../fwd_mt/mt.ctl
