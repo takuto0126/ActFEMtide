@@ -1,1 +1,1 @@
-../fwd/tide_fwd.ctl
+../fwd_tide/tide_fwd.ctl
