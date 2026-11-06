@@ -23,28 +23,38 @@ iflag_replace 0,1  |0
 # of srces for inv !1
 ## select components if one or more data will be used for the component
 Bx,By,Bz,Ex,Ey(5i2)!1 1 1 0 0
-Act err floor [0-1]!0.05
+Act err floor [0-1]!0.1
 index of source(S1)!1
-# of obesrvatories !9
-P10 amp data       !   1 ../fwd_tide/data_inv/P10_tide_amp.dat
-P11 amp data       !   2 ../fwd_tide/data_inv/P11_tide_amp.dat
-P12 amp data       !   3 ../fwd_tide/data_inv/P12_tide_amp.dat
-P13 amp data       !   4 ../fwd_tide/data_inv/P13_tide_amp.dat
-P14 amp data       !   5 ../fwd_tide/data_inv/P14_tide_amp.dat
-P15 amp data       !   6 ../fwd_tide/data_inv/P15_tide_amp.dat
-P16 amp data       !   7 ../fwd_tide/data_inv/P16_tide_amp.dat
-P17 amp data       !   8 ../fwd_tide/data_inv/P17_tide_amp.dat
-P18 amp data       !   9 ../fwd_tide/data_inv/P18_tide_amp.dat
+# of obesrvatories !14
+P5  amp data       !   1 ../fwd_tide/data_inv/P5_tide_amp.dat
+P6  amp data       !   2 ../fwd_tide/data_inv/P6_tide_amp.dat
+P7  amp data       !   3 ../fwd_tide/data_inv/P7_tide_amp.dat
+P8  amp data       !   4 ../fwd_tide/data_inv/P8_tide_amp.dat
+P9  amp data       !   5 ../fwd_tide/data_inv/P9_tide_amp.dat
+P10 amp data       !   6 ../fwd_tide/data_inv/P10_tide_amp.dat
+P11 amp data       !   7 ../fwd_tide/data_inv/P11_tide_amp.dat
+P12 amp data       !   8 ../fwd_tide/data_inv/P12_tide_amp.dat
+P13 amp data       !   9 ../fwd_tide/data_inv/P13_tide_amp.dat
+P14 amp data       !  10 ../fwd_tide/data_inv/P13_tide_amp.dat
+P15 amp data       !  11 ../fwd_tide/data_inv/P13_tide_amp.dat
+P16 amp data       !  12 ../fwd_tide/data_inv/P13_tide_amp.dat
+P17 amp data       !  13 ../fwd_tide/data_inv/P13_tide_amp.dat
+P18 amp data       !  14 ../fwd_tide/data_inv/P13_tide_amp.dat
 ## phase
-P10 pha data       !   1 ../fwd_tide/data_inv/P10_tide_pha.dat
-P11 pha data       !   2 ../fwd_tide/data_inv/P11_tide_pha.dat
-P12 pha data       !   3 ../fwd_tide/data_inv/P12_tide_pha.dat
-P13 pha data       !   4 ../fwd_tide/data_inv/P13_tide_pha.dat
-P14 pha data       !   5 ../fwd_tide/data_inv/P14_tide_pha.dat
-P15 pha data       !   6 ../fwd_tide/data_inv/P15_tide_pha.dat
-P16 pha data       !   7 ../fwd_tide/data_inv/P16_tide_pha.dat
-P17 pha data       !   8 ../fwd_tide/data_inv/P17_tide_pha.dat
-P18 pha data       !   9 ../fwd_tide/data_inv/P18_tide_pha.dat
+P5  pha data       !   1 ../fwd_tide/data_inv/P5_tide_pha.dat
+P6  pha data       !   2 ../fwd_tide/data_inv/P6_tide_pha.dat
+P7  pha data       !   3 ../fwd_tide/data_inv/P7_tide_pha.dat
+P8  pha data       !   4 ../fwd_tide/data_inv/P8_tide_pha.dat
+P9  pha data       !   5 ../fwd_tide/data_inv/P9_tide_pha.dat
+P10 pha data       !   6 ../fwd_tide/data_inv/P10_tide_pha.dat
+P11 pha data       !   7 ../fwd_tide/data_inv/P11_tide_pha.dat
+P12 pha data       !   8 ../fwd_tide/data_inv/P12_tide_pha.dat
+P13 pha data       !   9 ../fwd_tide/data_inv/P13_tide_pha.dat
+P14 pha data       !  10 ../fwd_tide/data_inv/P14_tide_pha.dat
+P15 pha data       !  11 ../fwd_tide/data_inv/P15_tide_pha.dat
+P16 pha data       !  12 ../fwd_tide/data_inv/P16_tide_pha.dat
+P17 pha data       !  13 ../fwd_tide/data_inv/P17_tide_pha.dat
+P18 pha data       !  14 ../fwd_tide/data_inv/P18_tide_pha.dat
 ## MT data #############################################################
 ## initial version support only impedance data 2021.12.13
 imp: 0, 1:amp,pha  !0
