@@ -23,7 +23,7 @@ iflag_replace 0,1  |0
 # of srces for inv !1
 ## select components if one or more data will be used for the component
 Bx,By,Bz,Ex,Ey(5i2)!1 1 1 0 0
-Act err floor [0-1]!0.1
+Act err floor [0-1]!0.03
 index of source(S1)!1
 # of obesrvatories !14
 P5  amp data       !   1 ../fwd_tide/data_inv/P5_tide_amp.dat
@@ -59,7 +59,7 @@ P18 pha data       !  14 ../fwd_tide/data_inv/P18_tide_pha.dat
 ## initial version support only impedance data 2021.12.13
 imp: 0, 1:amp,pha  !0
 unit:1Ohm,2mV/km/nT!2
-MT errfloor SSQ*   !0.03
+MT errfloor SSQ*   !0.1
 # of observatories |14
 P5  impedance      !   1 ../fwd_mt/result/P5_MT_imp.dat
 P6  impedance      !   2 ../fwd_mt/result/P6_MT_imp.dat
