@@ -48,7 +48,12 @@ folder=./
 ID=model$1
 echo $ID
 modelfile=result_inv/${ID}.dat
-z_elevation=0.75 # for horizontal slice
+z_elevation=-20.0 # for horizontal slice [km], write with decimal point # 2026.11.07 CC
+y_slice=40.0     # WE vertical slice y = y_slice [km] # 2026.11.07 CC
+x_slice=30.0     # SN vertical slice x = x_slice [km] # 2026.11.07 CC
+xmin=-100.0 ; xmax=100.0 # W and E boundaries [km] # 2026.11.07 CC
+ymin=-100.0 ; ymax=100.0 # S and N boundaries [km] # 2026.11.07 CC
+zmin=-120.0 ; zmax=0.0  # bottom and top of vertical slices [km] # 2026.11.07 CC
 igendat=1 # 0: no dat file generation, 1: dat file generation
 
 # CODE
@@ -61,7 +66,8 @@ cat << EOF > tmp0.ctl
 ## Note that lines starting with "##" work for comments ---
 ##
 ##             20->|
-mshfile            !../mesh_joint/nakadake3d.msh
+## 2026.11.07 CC mesh is changed to Kikai mesh
+mshfile            !../mesh/em3d.msh
 ## You should chose either of two types of resistivity structure file format,
 ## cond.msh type or model**.dat type
 ## 0 for cond.msh type, 1 for model**.dat type
@@ -92,36 +98,36 @@ ibound             !0
 nslice             !3
 ##---- Details for the first slice ------
 ## First slice file will be ${ID}_01.dat
-## slice y = 0 (WE vertical slice)
+## slice y = y_slice (WE vertical slice)
+## 2026.11.07 CC D and boundaries are changed for Kikai, sitefile line is removed
 A                  !0.0
 B                  !1.0
-D                  !0.0
-boundary left      !-1.0
-boundary right     !1.0
-boundary bottom    !0.25
-boundary top       !1.5
-sitefile           !dummy
+D                  !$(echo "$y_slice" | awk '{printf "%.3f",-$1}')
+boundary left      !$xmin
+boundary right     !$xmax
+boundary bottom    !$zmin
+boundary top       !$zmax
 ##--- Details for the second slice -----
 ## second slice file will be ${ID}_02.dat
-## slice x = 0 (SN vertical slice)
+## slice x = x_slice (SN vertical slice)
+## 2026.11.07 CC D and boundaries are changed for Kikai, sitefile line is removed
 A                  !1.0
 B                  !0.0
-D                  !0.0
-boundary left      !-1.0
-boundary right     !1.0
-boundary bottom    !0.25
-boundary top       !1.5
-sitefile           !dummy
+D                  !$(echo "$x_slice" | awk '{printf "%.3f",-$1}')
+boundary left      !$ymin
+boundary right     !$ymax
+boundary bottom    !$zmin
+boundary top       !$zmax
 ##--- Details for the third slice -----
-## horizontal slie z = 1.0
+## horizontal slice z = z_elevation
+## 2026.11.07 CC D and boundaries are changed for Kikai, sitefile line is removed
 A                  !0.0
 B                  !0.0
-D                  !-$z_elevation
-boundary left      !-1.0
-boundary right     !1.0
-boundary bottom    !-1.0
-boundary top       !1.0
-sitefile           !dummy
+D                  !$(echo "$z_elevation" | awk '{printf "%.3f",-$1}')
+boundary left      !$xmin
+boundary right     !$xmax
+boundary bottom    !$ymin
+boundary top       !$ymax
 ##------------------ control file for slice.exe ends here !! ----------------------
 EOF
 
@@ -144,7 +150,8 @@ SL1="WE"
 SL2="SN"
 
 CPT="slice.cpt"
-range=-1.0/1.0/0.25/1.5
+range=$xmin/$xmax/$zmin/$zmax # 2026.11.07 CC
+range_sn=$ymin/$ymax/$zmin/$zmax # 2026.11.07 CC
 #bb=a0.25/a0.25:"Distance\(km\)":WeSn
 bb=a0.25/a0.25wesn
 scl=8/5
@@ -159,7 +166,7 @@ scl2=20/20
 range3=0/20/0/20
 
 yy=`echo " scale=1; 2.5 + 5.3" | bc`
-gmt basemap -JX$scl -R$range -Bxa0.25 -Bya0.25+l"Elevation" -BWeSn  -X${xshift} -Y${yy} 
+gmt basemap -JX$scl -R$range -Bxa30 -Bya20+l"Elevation[km]" -BWeSn  -X${xshift} -Y${yy} # 2026.11.07 CC
 if [ -e "./${ID}_01.dat" ];then
 gmt plot "${ID}_01.dat" -C -L 
 fi
@@ -168,7 +175,7 @@ gmt text -JX$scl -R$range2  -F+f12,Helvetica+jLM -G255 <<EOF
 0.15  4.6 W
 7.00  4.6 E
 EOF
-gmt basemap -JX$scl -R$range -Bxa0.25+l"Distance[km]" -Bya0.25+l"Elevation[km]" -BWeSn -Y-6
+gmt basemap -JX$scl -R$range_sn -Bxa30+l"Distance[km]" -Bya20+l"Elevation[km]" -BWeSn -Y-6 # 2026.11.07 CC
 if [ -e  "${ID}_02.dat" ];then
  gmt plot "${ID}_02.dat" -C -L 
 fi
@@ -179,15 +186,21 @@ gmt text -JX$scl -R$range2  -F+f12,Helvetica+jLM -G255 <<EOF
 EOF
 
 # horizontal slice
-gmt basemap -JX8/8 -R-1/1/-1/1 -Bxa0.25+l"Distance[km]" -Bya0.25+l"Distance[km]" -BWeSn -X10
+gmt basemap -JX8/8 -R$xmin/$xmax/$ymin/$ymax -Bxa30+l"Distance[km]" -Bya30+l"Distance[km]" -BWeSn -X10 # 2026.11.07 CC
 if [ -e  "${ID}_03.dat" ];then
  gmt plot "${ID}_03.dat" -C -L 
 fi
 # site locations
 fldr=result_inv/
+if [ -e "${fldr}site_act.dat" ];then # 2026.11.07 CC site_act.dat does not exist for MT only inversion
 awk '{print($1,$2)}' ${fldr}site_act.dat | gmt plot -Sc0.2 -W1,black -Gred #active sites
+fi # 2026.11.07 CC
+if [ -e "${fldr}S1_site.dat" ];then # 2026.11.07 CC S1_site.dat does not exist for MT only inversion
 awk '{print($1,$2)}' ${fldr}S1_site.dat  | gmt plot -W2p,red # source S1
+fi # 2026.11.07 CC
+if [ -e "${fldr}S2_site.dat" ];then # 2026.11.07 CC S2 does not exist for Kikai
 awk '{print($1,$2)}' ${fldr}S2_site.dat  | gmt plot -W2p,red # source S2
+fi # 2026.11.07 CC
 awk '{print($1,$2)}' ${fldr}site_mt.dat  | gmt plot -Sc0.2 -W1,black -Ggreen # MT site
 
 # ID and W E
@@ -207,4 +220,4 @@ EOF
 
 gmt end
 open ${ID}.pdf &
-rm test*.ctl *.dat
+rm -f tmp.ctl ${ID}_0[1-3].dat # 2026.11.07 CC

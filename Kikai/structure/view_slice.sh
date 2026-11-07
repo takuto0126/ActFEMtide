@@ -6,7 +6,7 @@ source /opt/intel/oneapi/setvars.sh
 igendat=1 # 0: no dat file generation, 1: dat file generation
 bl=-100.0
 br=100.0
-bb=-200.0
+bb=-120.0
 bt=1.0
 SL1="WE"
 A=0.0
@@ -113,10 +113,19 @@ bb1=a0.25/a0.25Wesn
 bb2=a1f0.25/a0.25WeSn
 echo range = $range
 
+# site locations from ../mesh/mesh.ctl # 2026.11.07 CC
+# x,y are calculated as in calobsxyz of tmtgem/common/m_param_mesh.f90 # 2026.11.07 CC
+sites=`awk -F'|' -v R=6371.0 ' # 2026.11.07 CC
+/^west bound/{w=$2+0} /^east bound/{e=$2+0} /^south bound/{s=$2+0} /^north bound/{n=$2+0}
+/^name of obs/{name=$2; gsub(/ /,"",name)}
+/^lon,lat/{split($2,a," "); d2r=atan2(0,-1)/180; lon0=(w+e)/2; lat0=(s+n)/2;
+ printf "%.7f %.7f %s\n",(a[1]-lon0)*d2r*R*cos(lat0*d2r),(a[2]-lat0)*d2r*R,name}
+' ../mesh/mesh.ctl`
+
 gmt begin slice pdf
 
 #gmt makecpt -Crainbow -T1.7/2.2/0.01 -I
-gmt makecpt -Crainbow -T1.0/3.5/0.1 -I
+gmt makecpt -Crainbow -T1.0/2.5/0.01 -I
 #gmt makecpt -Crainbow -T0/3.0/0.01 -I
 
 # WE slice
@@ -154,6 +163,8 @@ gmt psxy  -W0.8,black,- -L << EOF # G3 anomaly
 -0.15 1.05
 -0.15 0.50
 EOF
+echo "$sites" | gmt plot -Sc0.15 -W0.5,black -Gred # site locations 2026.11.07 CC
+echo "$sites" | gmt text -F+f6p,Helvetica,black+jLM -D0.12/0 # site names 2026.11.07 CC
 echo "0.5  7.5 $ID z=-20km" | gmt text -JX8/8 -R0/8/0/8  -Gwhite -F+f10p,Helvetica,black+jLM
 
 gmt psscale -Dx10/0+w10/0.3 -B0.1  -C -X-1 #-G-0.3/2.5
