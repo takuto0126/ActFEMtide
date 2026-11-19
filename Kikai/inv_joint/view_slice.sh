@@ -48,7 +48,7 @@ folder=./
 ID=model$1
 echo $ID
 modelfile=result_inv/${ID}.dat
-z_elevation=-5.0 # for horizontal slice [km], write with decimal point # 2026.11.07 CC
+z_elevation=-20.0 # for horizontal slice [km], write with decimal point # 2026.11.07 CC
 y_slice=40.0     # WE vertical slice y = y_slice [km] # 2026.11.07 CC
 x_slice=30.0     # SN vertical slice x = x_slice [km] # 2026.11.07 CC
 xmin=-100.0 ; xmax=100.0 # W and E boundaries [km] # 2026.11.07 CC

@@ -98,7 +98,7 @@ cd $SRC
 make clean
 make
 cd -
-${SRC}/slice.exe << EOF
+${SRC}/slice.exe << EOF || { echo "slice.exe failed, stop before drawing old test_0*.dat"; exit 1; } # 2026.11.07 CC
 tmp.ctl
 EOF
 fi
@@ -125,7 +125,7 @@ sites=`awk -F'|' -v R=6371.0 ' # 2026.11.07 CC
 gmt begin slice pdf
 
 #gmt makecpt -Crainbow -T1.7/2.2/0.01 -I
-gmt makecpt -Crainbow -T1.0/2.5/0.01 -I
+gmt makecpt -Crainbow -T1.0/2.5/0.01 -I -M --COLOR_FOREGROUND=red --COLOR_BACKGROUND=purple # 2026.11.07 CC values >= 2.5 are purple, -I swaps F and B
 #gmt makecpt -Crainbow -T0/3.0/0.01 -I
 
 # WE slice
@@ -163,11 +163,13 @@ gmt psxy  -W0.8,black,- -L << EOF # G3 anomaly
 -0.15 1.05
 -0.15 0.50
 EOF
+# coastline, polygon1.dat has y in column 2 and x in column 3, NF==3 lines are segment headers # 2026.11.07 CC
+awk 'NF==3{print ">";next} NF==5{print $3,$2}' ../mesh/polygon1.dat | gmt plot -W0.5,black # 2026.11.07 CC
 echo "$sites" | gmt plot -Sc0.15 -W0.5,black -Gred # site locations 2026.11.07 CC
 echo "$sites" | gmt text -F+f6p,Helvetica,black+jLM -D0.12/0 # site names 2026.11.07 CC
 echo "0.5  7.5 $ID z=-20km" | gmt text -JX8/8 -R0/8/0/8  -Gwhite -F+f10p,Helvetica,black+jLM
 
-gmt psscale -Dx10/0+w10/0.3 -B0.1  -C -X-1 #-G-0.3/2.5
+gmt psscale -Dx10/0+w10/0.3+ef -B0.1  -C -X-1 #-G-0.3/2.5 # 2026.11.07 CC +ef shows purple for >= 2.5
 
 gmt text -R0/20/0/20 -JX20/20 -F+f13p,Helvetica,black+jCM << EOF 
 10.5 11.5 log@-10@- @%30%@~r@~@%%
