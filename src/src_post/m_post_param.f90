@@ -28,7 +28,7 @@ type profile
 end type
 
 type param_slice ! 2017.12.20
- character(50) :: mshfile
+ character(70) :: mshfile ! 2026.11.07 CC 50 -> 70 to match READMESH_TOTAL
  ! 0:condfile, 1:modelfile 2018.01.05
  ! 2: dcond,   3:dmodel    2018.03.19
  integer(4)    :: ifileflag
@@ -70,7 +70,7 @@ character(100)              :: paramfile ! 2020.12.10
 write(*,*) ""
 write(*,*) "<Please input the forward parameter file>" ! 2020.12.10
 read(*,'(a)') paramfile                 ! 2020.12.10
-call readcontrolfile(paramfile,n,lines,ikeep=1) ! 2020.12.10 see m_param.ctl
+call readcontrolfile(paramfile,ikeep=1) ! 2026.11.07 CC n,lines are removed, see common/m_param.f90
 
 open(input,file="tmp.ctl") ! 2020.12.10
 !# read parameter

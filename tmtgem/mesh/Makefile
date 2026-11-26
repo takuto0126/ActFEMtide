@@ -2,7 +2,7 @@
 # added mkline
 
 #FC=gfortran
-FC=ifort
+FC=ifx
 VPATH = ../common
 OPT=-O -fpe0 -check bounds -traceback -g
 #OPT=-O3

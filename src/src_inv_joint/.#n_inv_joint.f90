@@ -1,1 +1,0 @@
-Tokuma@nakayatokushinnoMacBook-Pro.local.60167

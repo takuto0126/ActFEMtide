@@ -529,6 +529,7 @@ write(*,'(32x,a)') "log10(amp [nT/A]) / phase [deg]"  ! 2020.09.29
 end do
 end if
 10 format(    i3,1x, a,  i3,1x,a,1x,a,    1x,a,1x,    a,      2f15.7,       1x,a,i3,1x,a,i3) ! 20200929
+
 !#[2-3]## out obs files with adopted errors 2018.06.26
  head       = g_param_apinv%outputfolder     ! 2018.06.26
  nhead      = len_trim(head)

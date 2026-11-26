@@ -1,9 +1,0 @@
-phase_shift.f90
-*.log
-site.dat
-tmp.ctl
-*.pdf
-pull.sh
-*.grd
-result/*
-!result/.gitkeep

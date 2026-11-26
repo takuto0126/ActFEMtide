@@ -165,6 +165,12 @@ do i=1,g_meshpara%nlayer_max - 1
  read(input,22) g_meshpara%depth_nlayer(i) ![km]
 end do
 call calobsxyz(g_meshpara)
+open(1,file="obs_xyz.dat")
+ do i=1,g_meshpara%nobs
+  write(1,'(a,2x,3g15.7)') trim(g_meshpara%obsname(i)),g_meshpara%lonlatalt(1:3,i)
+  write(1,'(10x,3g15.7)') g_meshpara%xyz(1:3,i)
+ end do
+close(1)
 
 !#[6]## read header
 write(*,*) "input header"

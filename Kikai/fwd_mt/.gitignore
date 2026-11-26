@@ -1,0 +1,9 @@
+result/*
+mt_err/*
+*.dat
+*.log
+tmp.ctl
+*.pdf
+
+!result/.gitkeep
+!mt_err/.gitkeep

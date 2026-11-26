@@ -5,6 +5,8 @@
 *.o
 *.mod
 *.exe
-.DS_StoreS
+.DS_Store
+gmt.conf
 pull.sh
 pullresult.sh
+.DS_store

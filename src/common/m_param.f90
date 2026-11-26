@@ -1,4 +1,5 @@
 module param
+use constants ! 2026.07.30
 implicit none
 
 type param_forward
@@ -108,7 +109,7 @@ end type
 ! character(70) :: bellgeofile
 ! integer(4) :: ilonlatflag ! 1 for lonlat, 2 for xy [km]
 ! real(8)  :: lon_bell, lat_bell
-! real(8)  :: radius![km]
+! real(8)  :: planetrad![km]
 ! real(8)  :: width ![km]
 ! real(8)  :: ztop  ! < 0 [km] how deep is the top of bell
 ! real(8)  :: zbot  ! < 0 [km] how deep is the bottom of bell
@@ -151,16 +152,12 @@ integer(4)                  :: i,j,nobs,input=2,nsource
 character(70)               :: site
 real(8)                     :: lonorigin,latorigin,a
 character(100)              :: paramfile
-integer(4),    parameter    :: n = 1000 ! 2020.09.28
-character(200),dimension(n) :: lines    ! 2020.09.28
-real(8) :: pi,d2r,radius
-pi=4.*atan(1.d0)
-d2r=pi/180.
 !#
 write(*,*) ""
 write(*,*) "<Please input the forward parameter file>" ! 2020.09.28
 read(*,'(a)') paramfile           ! 2020.09.28
-call readcontrolfile(paramfile,n,lines) ! 2020.09.28
+!call readcontrolfile(paramfile,n,lines) ! 2020.09.28
+call readcontrolfile(paramfile) ! 2026.07.29
 
 open(input,file="tmp.ctl")
 !#[2]# read mesh_param file
@@ -304,12 +301,12 @@ write(*,*) "" !2021.09.29
    site=c_param%obsname(i) ! 2021.09.02
 
    ! lonlatalt
-   radius = 6371.2 ! [km]
+   !planetrad = 6371.2 ! [km] planetrad is included in m_constants.f90 2026.07.30
    if ( c_param%lonlatflag .eq. 0 ) then !2024.02.08
 
      read(input,*) (c_param%lonlataltobs(j,i),j=1,3)
-     c_param%xyzobs(1,i) = (c_param%lonlataltobs(1,i) - lonorigin)*d2r*radius*cos(latorigin*d2r)
-     c_param%xyzobs(2,i) = (c_param%lonlataltobs(2,i)-latorigin)*d2r*radius
+     c_param%xyzobs(1,i) = (c_param%lonlataltobs(1,i) - lonorigin)*d2r*planetrad*cos(latorigin*d2r)
+     c_param%xyzobs(2,i) = (c_param%lonlataltobs(2,i)-latorigin)*d2r*planetrad
      c_param%xyzobs(3,i) = c_param%lonlataltobs(3,i)
      write(*,'(1x,a,2f15.7,a)') "lon lat >",c_param%xyzobs(1:2,i)," [km]" ! 2024.02.08
 
@@ -604,13 +601,35 @@ write(*,'(a)') " ### CALOBSR END!! ###"
 
 return
 end subroutine
-!######################################################### UTMXY
-!# Coded on 2016.10.12 by T.MINAMI
-subroutine UTMXY(lonlat,lonorigin,latorigin,xyout,zone)
+!######################################################### Equidistant Cylindrical Projection (ECP)
+! added on 2025.06.09
+subroutine ECPXY(lonlat,lonorigin,latorigin,xyout,angle)
 implicit none
-real(8),intent(in) :: lonlat(2),lonorigin,latorigin
-character(3),intent(in) :: zone
-real(8) ,intent(out) :: xyout(2)
+real(8),          intent(in) :: lonlat(2),lonorigin,latorigin
+real(8) ,         intent(out) :: xyout(2)
+real(8),optional, intent(in) :: angle
+real(8) :: xorigin,yorigin,x,y,dlat
+integer(4) :: i
+
+dlat=latorigin*d2r
+xyout(1)= planetrad * cos(dlat)*(lonlat(1) - lonorigin)*d2r ! eastward [km]
+xyout(2)= planetrad *           (lonlat(2) - latorigin)*d2r ! northward [km]
+
+if (present(angle)) call rotate(xyout(1),xyout(2),angle) ! 2025.06.09
+!write(*,*) "xout=",xout,"yout=",yout
+
+return
+end subroutine
+
+!######################################################### UTMXY
+!# include coordinate rotation 2024.08.28
+!# Coded on 2016.10.12 by T.MINAMI
+subroutine UTMXY(lonlat,lonorigin,latorigin,xyout,zone,angle) ! angle is added 2026.07.29
+implicit none
+real(8),          intent(in) :: lonlat(2),lonorigin,latorigin
+character(3),     intent(in) :: zone
+real(8) ,         intent(out) :: xyout(2)
+real(8),optional, intent(in) :: angle
 real(8) :: xorigin,yorigin,x,y
 
 call UTMGMT(lonlat(1),lonlat(2), x,       y,      zone,0)
@@ -621,10 +640,27 @@ call UTMGMT(lonorigin,latorigin, xorigin, yorigin,zone,0)
 xyout(1) = (x - xorigin)/1.d3 ! [km]
 xyout(2) = (y - yorigin)/1.d3 ! [km]
 
+if (present(angle)) call rotate(xyout(1),xyout(2),angle) ! 2024.08.28
 !write(*,*) "xout=",xout,"yout=",yout
 
 return
 end subroutine
+!##########################################################
+subroutine rotate(x,y,theta) ! copied from latest m_param.f90 in ActFEM/src/common/m_param.f90 2026.07.29
+implicit none
+real(8),intent(in)    :: theta
+real(8),intent(inout) :: x,y
+real(8)    :: x1,y1,pi,d2r,s
+pi=4.*atan(1.d0)
+d2r=pi/180.
+s=theta*d2r
+x1= cos(s)*x + sin(s)*y  
+y1=-sin(s)*x + cos(s)*y
+x=x1
+y=y1
+return
+end
+
 !######################################################### UTMGMT
 subroutine UTMGMT(xin,yin,xout,yout,zone,iflag)
 implicit none
@@ -936,41 +972,49 @@ end subroutine
   end subroutine utm_geo_tm
 
 !############################################ whoelread ! 2020.09.28
-subroutine readcontrolfile(filename,n,lines,ikeep) ! 2021.10.04 ikeep is added
+!subroutine readcontrolfile(filename,n,lines,ikeep) ! 2021.10.04 ikeep is added
+subroutine readcontrolfile(filename,ikeep) ! 2021.10.04 ikeep is added
 implicit none
 character(100),intent(in)  :: filename
-integer(4),    intent(in)  :: n
-character(200),intent(out) :: lines(n)
-integer(4) :: i
+!integer(4),    intent(in)  :: n
+!character(200),intent(out) :: lines(n)
+character(200),allocatable,dimension(:) :: lines
+integer(4) :: i,n,nn
 integer(4),optional,intent(in) ::  ikeep ! 1 means keep 20 columns 2021.10.04
-i=0
 write(*,'(a,a)') " file is ",trim(filename)
-lines(:)=" " ! initialize 2020.12.10
 
 open(1,file=filename)
-do
-i=i+1
-read(1,'(a)',end=99) lines(i)
-end do
-99 continue
-
+ n=0
+ do 
+  read(1,*,end=99)
+  n=n+1
+ end do
+ 99 continue
+ rewind(1)
+ write(*,*) "n=",n
+ allocate(lines(n)) ! 2025.07.17
+ do i=1,n
+   read(1,'(a)') lines(i)
+   !write(*,'(a)') trim(lines(i)) ! commented out on 2025.07.17
+ end do
+nn= i-1 ! 2025.07.17
 close(1)
 
-!do i=1,20
-!write(*,'(a)') trim(lines(i))
-!end do
-
+write(*,*)"subtractcomment start, n=",n
 call subtractcommentout(n,lines)
 
 open(1,file="tmp.ctl")
+if (present(ikeep)) write(*,*) "ikeep is included in input: ikeep =",ikeep ! 2026.07.29
 do i=1,n
-if ( present(ikeep) .and. ikeep .eq. 1 ) then !2021.10.04
- write(1,'(a)')  lines(i)(1:len_trim(lines(i))) ! cut initial 20 characters 2021.10.04
-else   ! 2021.10.04
- write(1,'(a)')  lines(i)(21:len_trim(lines(i))) ! cut initial 20 characters 2021.09.02
-end if ! 2021.10.04
-! write(1,'(a)') trim(lines(i))
+ if ( present(ikeep) ) then !2025.04.24
+   if ( ikeep == 1  ) write(1,'(a)')  lines(i)(1:len_trim(lines(i))) 
+   if ( ikeep .ne. 1) write(1,'(a)')  lines(i)(21:len_trim(lines(i))) !2025.04.24
+ else   ! 2021.10.04
+   write(1,'(a)')  lines(i)(21:len_trim(lines(i)))
+ end if ! 2021.10.04
+ ! write(1,'(a)') trim(lines(i))
 end do
+
 close(1)
 
 write(*,'(a)') " ### readcontrolfile END!! ###"

@@ -51,5 +51,5 @@ nlayer=2 up to [km]|-0.6
 nlayer=3 up to [km]|-6.0
 header             |polygon
 bgmesh: upzin  [km]|20.0
-bgmesh: downzin[km]|-20.0
-bgmesh:sizein3d[km]|14.0
+bgmesh: downzin[km]|-60.0
+bgmesh:sizein3d[km]|20.0

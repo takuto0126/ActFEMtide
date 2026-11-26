@@ -1,11 +1,11 @@
 # Coded on 2017.05.30 by T. MINAMI
 # compile in EIC with MPI and PARDISO
 
-FC=mpiifort
+FC=mpiifx
 MPIFC=mpif90
 #OPT=-i-dynamic
 VPATH = ../common ../solver ../common_mpi ../src_tide 
-OPT0= -O3 -xAVX -qmkl=parallel -lmpi -traceback -g
+OPT0= -O3 -qmkl=parallel -lmpi -traceback -g # -xAVX
 #OPT0= -O -fpe0 -check bounds -traceback -g  -qmkl=parallel -lmpi
 
 #2016.03.03 solver with many modules

@@ -43,7 +43,7 @@ character(1) :: num ! 2022.01.04
 !#[1]## set
  doftot = g_surface%nline
  A = g_surface%A  ! 2021.06.08
- write(*,*) "nsr=",nsr,"ip",ip
+ !write(*,*) "nsr=",nsr,"ip",ip
  allocate(Avalue_bc(doftot),line_bc(doftot))
  allocate(b_vec(doftot,nsr)) ! 2017.07.11
  allocate(bs(   doftot,nsr)) ! 2021.06.01
@@ -159,15 +159,15 @@ end if
  call solvePARDISO(doftot,nsr,A,b_vec,bs,ip) !　2017.07.11
 
  if (.false.) then
- open(1,file="2Din"//num//".dat")
- write(1,'(i4,2g15.7)') (i,bs(i,1),i=1,doftot)
- close(1)
+   open(1,file="2Din"//num//".dat")
+   write(1,'(i4,2g15.7)') (i,bs(i,1),i=1,doftot)
+   close(1)
  end if
 
  if (.not. allocated(g_surface%bs)) allocate(g_surface%bs(g_surface%nline))
  g_surface%bs(:) = bs(:,1)   ! store solution
 
-write(*,*) "### forward_2DTM END !! ###"! 2021.10.14
+!write(*,*) "### forward_2DTM END !! ###"! 2021.10.14
 
 return
 end
@@ -189,7 +189,7 @@ implicit none
        write(*,*) "GEGEGE dof_id=",dof_id,"doftot_ip=",doftot_ip
      stop
     end if
-    write(*,*) "### SET TABLE_DOF END!! ###"
+    !write(*,*) "### SET TABLE_DOF END!! ###"
 return
 end
 !###################################################################
@@ -206,7 +206,7 @@ dofn  = 1
 
 do j=1,n
 nline = g_surface(j)%nline
-write(*,'(a,i3,a,i7)') "Surface #",j,"  nline =",nline ! 2021.10.14
+!write(*,'(a,i3,a,i7)') "Surface #",j,"  nline =",nline ! 2021.10.14
 ntri  = g_surface(j)%ntri
 
 allocate(g_surface(j)%table_dof(nline,dofn))
@@ -360,7 +360,7 @@ CALL sup_iccg(elm_k,table_dof_elm,3,A%D,A%INU,A%IAU,A%AU,g_surface%nline,A%iau_t
 
   end do ! element loop end
 
-write(*,*) "### GENMAT END !! ###"
+!write(*,*) "### GENMAT END !! ###"
 
 !  do i=1,l_line%nline
 !   if (b_vec(i) .ne. 0.d0) write(*,*) i,"b=",b_vec(i)
@@ -504,7 +504,7 @@ write(num,'(i1)') iface
           enddo
         endif
       enddo
-if (ip .eq. 0) write(*,*) "### SET_BC_ICCG END!! ###"
+!if (ip .eq. 0) write(*,*) "### SET_BC_ICCG END!! ###"
 RETURN
 END
 !

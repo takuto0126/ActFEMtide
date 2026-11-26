@@ -93,7 +93,7 @@ type(grid_data) :: gebco_grd                   ! 2018.08.27 see m_coastline_data
  ntri = l_line%ntri ! 2018.11.18
  call outpregeo8(l_line,n3top,n3bot,xyz3d,n3d,pregeo,nlinbry,&
  &               linbry_sb,ki_mesh,g_meshpara,m4,ntri) ! 2018.11.18
-! call outbgmesh3d(bgmeshfile,g_meshpara) ! see outbgmesh3d.f90 commented out 2019.04.02
+ call outbgmesh3d(bgmeshfile,g_meshpara) ! see outbgmesh3d.f90 commented out 2019.04.02
 
 end program mk3dgeo
 !########################################## calzkailand

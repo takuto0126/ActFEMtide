@@ -425,7 +425,7 @@ type(real_crs_matrix)                 :: RTR        ! This is not used 2017.12.2
 integer(4),parameter                  :: itype_roughness = 3 ! MSG 2017.12.25
 !# internal variables
 type(PARDISO_PARAM)                   :: B        ! 2017.12.18
-real(8)                               :: epsilon
+real(8)                               :: ee=1.d-2 ! small value for diagonal 2025.07.29
 integer(4)                            :: i,j
 integer(4)                            :: nmodelactive ! 2018.06.25
 type(watch) :: t_watch  ! 2017.12.22
@@ -439,11 +439,11 @@ write(*,*) "### GENRI_MSG START!! ###" !2017.12.28
 
 !#[1]## add small values to diagonals of R (Usui et al., 2017)
  RE = R  ! 2017.12.25
- epsilon =1.d-2 ! small value
  do i=1,RE%nrow
   do j=RE%stack(i-1)+1,RE%stack(i)
    if ( RE%item(j) .eq. i ) then ! only diagonal
-   RE%val(j) = RE%val(j) + epsilon                 ! 2017.08.31
+   RE%val(j) = RE%val(j) + ee   ! epsilon -> ee 2025.07.29
+
    end if
   end do
  end do
@@ -482,7 +482,7 @@ type(real_crs_matrix)                :: R       ! 2017.12.25
 type(real_crs_matrix)                :: RTR     ! 2017.12.25
 type(real_crs_matrix)                :: crsin,crsout ! 2017.12.25
 integer(4)                           :: nmodel,i,j,j1,j2,ntot
-real(8)                              :: epsilon
+real(8)                              :: ee=1.d-2 ! 2025.07.29
 real(8),allocatable,dimension(:)     :: volmodel    ! 2017.06.14
 type(real_crs_matrix)                :: model2ele ! 2017.06.14
 real(8)                              :: v,xx(3,6), elm_xyz(3,4) ! 2017.06.14
@@ -522,11 +522,10 @@ call watchstart(t_watch) ! 2017.12.22
  end if
 
 !#[3]## add small values to diagonals (Usui et al., 2017)
- epsilon =1.d-2 ! small value
  do i=1,nmodel
   do j=stack(i-1)+1,stack(i)
   if ( item(j) .eq. i ) then ! only diagonal
-   RTR%val(j) = RTR%val(j) + epsilon                 ! 2017.08.31
+   RTR%val(j) = RTR%val(j) + ee                 ! epsilon -> ee 2025.07.29
    !  write(*,*) "i",i,"RTR%val(j)=",RTR%val(j),"volmodel(i)",volmodel(i)
    !  RTR%val(j) = RTR%val(j) + 10.*(volmodel(i)**3.d0) ! commented out 2017.08.31
   end if
@@ -535,9 +534,12 @@ call watchstart(t_watch) ! 2017.12.22
 
 !#[4]## calculate BMI
 
-!write(*,*) "nmodel check =",nmodel
+ write(*,*) "nmodel check =",nmodel
+ write(*,*) "size(RTR%item)",size(RTR%item)
+ write(*,*) "size(RTR%stack)",size(RTR%stack)
  call PARDISOphase1(RTR,B)   ! see m_solveCM_ap.f90
  call PARDISOphase2(B)       ! see m_solveCM_ap.f90
+ write(*,*) "nmodel 3",nmodel
  call PARDISOphase3(B,nmodel,BMI) ! see m_solveCM_ap.f90 2017.12.25
  call PARDISOphase4(B)       ! see m_solveCM_ap.f90
 
@@ -588,7 +590,7 @@ type(real_crs_matrix),  intent(out)   :: R                ! 2017.12.14
 type(real_crs_matrix),  intent(out)   :: RTR              ! 2017.12.25
 type(real_crs_matrix)                 :: D,Q,DQT,DQ,crsout,QT,QTDQ,crs, DQ2 ! 2018.06.22
 type(real_ccs_matrix)                 :: DQTCCS,QTCCS
-integer(4),allocatable,dimension(:,:) :: n4face,n4flag,n4
+integer(4),allocatable,dimension(:,:) :: n4face,n4!,n4flag ! n4flag is commented out 2026.07.30
 integer(4),allocatable,dimension(:)   :: index, ele2model
 integer(4),allocatable,dimension(:)   :: iactive   ! 2018.06.22
 integer(4),allocatable,dimension(:)   :: icount
@@ -617,7 +619,8 @@ call watchstart(t_watch_total) ! 2017.12.22
   node      = g_mesh%node
   nphys1    = g_model%nphys1
   nphys2    = g_model%nphys2  ! # of elements in land
-  allocate(n4face(ntet,4),n4flag(ntet,2),n4(ntet,4),xyz(3,node))
+  allocate(n4face(ntet,4),n4(ntet,4),xyz(3,node))
+  ! allocate(n4flag(ntet,2)) ! commented out because not used
   allocate(index(nphys2),ele2model(nphys2))
   n4face    = g_face%n4face
   index     = g_model%index ! element id for nphys2
@@ -625,7 +628,7 @@ call watchstart(t_watch_total) ! 2017.12.22
   ele2model = g_model%ele2model
   n4        = g_mesh%n4     ! 2017.05.18
   xyz       = g_mesh%xyz    ! 2017.05.18
-  n4flag    = g_mesh%n4flag ! 2017.06.18
+  ! n4flag    = g_mesh%n4flag ! commented out 2026.07.30 because not used
   icombine     = g_model%icombine     ! 2018.06.22
   write(*,'(a,i7)') " GENDQ_AP nmodel",nmodel ! 2020.09.18
   allocate( iactive(nmodel) )         ! 2018.06.22
