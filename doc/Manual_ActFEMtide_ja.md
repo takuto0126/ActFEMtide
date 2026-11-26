@@ -23,31 +23,49 @@ tminami@port.kobe-u.ac.jp
 1. [はじめに](#Introduction)
 2. [重要事項](#ImportantNotes)
 3. [必要な環境](#Required_environments)
-4. [サンプルシミュレーションの実行](#Run_sample_simulations)  
- - サンプル1: [鬼海カルデラ (Kikai)](#Tohoku_small)
-5. [支配方程式と離散化](#Governing_equation_and_discretization)
-   - [5.1 支配方程式](#sec5_1)
-   - [5.2 弱形式](#sec5_2)
-   - [5.3 辺要素による離散化](#sec5_3)
-   - [5.4 潮汐起電力項（右辺ベクトル）](#sec5_4)
-   - [5.5 スケーリングと単位](#sec5_5)
-   - [5.6 電場・磁場・電流の計算](#sec5_6)
-6. [インバージョンのチュートリアル](#Inversion_tutorial)
+4. [支配方程式](#Governing_equation)
+5. [順計算のチュートリアル（Kikai/fwd_tide/）](#Forward_tutorial)
+   - [5.1 Step 0: 潮汐モデルの準備](#sec5_1)
+   - [5.2 Step 1: 地形データの準備](#sec5_2)
+   - [5.3 Step 2: 四面体メッシュの生成](#sec5_3)
+   - [5.4 Step 3: 生成されたメッシュファイルの確認](#sec5_4)
+   - [5.5 Step 4: 比抵抗構造の作成](#sec5_5)
+   - [5.6 Step 5: 潮汐流と背景磁場の準備](#sec5_6)
+   - [5.7 Step 6: 順計算の実行](#sec5_7)
+   - [5.8 Step 7: 結果の確認](#sec5_8)
+6. [逆計算（インバージョン）のチュートリアル（Kikai/inv_*/）](#Inversion_tutorial)
    - [6.1 Step 1: 準備](#sec6_1)
    - [6.2 Step 2: 潮汐起源磁場の合成データの作成](#sec6_2)
    - [6.3 Step 3: MT の合成データの作成](#sec6_3)
    - [6.4 Step 4: インバージョンの実行](#sec6_4)
    - [6.5 Step 5: 結果の確認](#sec6_5)
-7. [インバージョン制御ファイル（joint.ctl）](#Inversion_control)
+7. [順計算の制御ファイル（tide_fwd.ctl）](#Forward_control)
    - [7.1 共通の規則](#sec7_1)
    - [7.2 項目一覧](#sec7_2)
    - [7.3 例](#sec7_3)
-   - [7.4 データファイルの形式](#sec7_4)
+   - [7.4 出力ファイル](#sec7_4)
+8. [インバージョン制御ファイル（joint.ctl）](#Inversion_control)
+   - [8.1 共通の規則](#sec8_1)
+   - [8.2 項目一覧](#sec8_2)
+   - [8.3 例](#sec8_3)
+   - [8.4 データファイルの形式](#sec8_4)
+- [参考文献](#References)
+- [付録A 離散化](#Appendix_discretization)
+   - [A.1 弱形式](#secA_1)
+   - [A.2 辺要素による離散化](#secA_2)
+   - [A.3 潮汐起電力項（右辺ベクトル）](#secA_3)
+   - [A.4 スケーリングと単位](#secA_4)
+   - [A.5 電場・磁場・電流の計算](#secA_5)
+- [付録B メッシュ生成](#Appendix_mesh)
+   - [B.1 メッシュ生成の流れ](#secB_1)
+   - [B.2 制御ファイル（mesh.ctl）](#secB_2)
+   - [B.3 パラメータの意味](#secB_3)
+
 
 ## 1 はじめに <a id="Introduction"></a>
 __ActFEMtide__ は、海洋中の起電力を介して潮汐起源の電磁場を計算するためのシミュレーションコードである。メインのソルバーは __ActFEM__ [(Minami et al. 2018)](#Minami2018) をベースとしており、励起源を電流ダイポールから潮汐起源の起電力（$\mathbf{v}\times \mathbf{F}$）に置き換えたものである。
 __ActFEMtide__ は Fortran で書かれており、疎行列直接解法ソルバー PARDISO を使用するために Intel Math Kernel Library (mkl) を利用する。ActFEMtide は PARDISO による並列計算に openMP を、複数周波数に対する並列計算に MPI を使用できる。
-__ActFEMtide__ は __TMTGEM__ [(Minami et al. 2017)](#Minami2017) のために開発されたメッシュ生成部を使用している。
+__ActFEMtide__ は __TMTGEM__ [(Minami et al. 2017)](#Minami2017) のために開発されたメッシュ生成部を使用している（[付録B](#Appendix_mesh)）。
 ActFEMtide は 1: メッシュ生成部、2: シミュレーション部の2つの部分から構成される。__ActFEMtide__ は現在、[(Egbert and Erofeeva, 2002)](#EE2002) による潮汐モデルの出力を使用することを前提としている。
 __ActFEMtide__ はメッシュ生成に [Gmsh](https://www.soest.hawaii.edu/gmt/) を使用し、[Oishi et al. (2013)](#O2013) に記載された extrude アルゴリズムを用いる。これはもともと __TMTGEM__ のために開発されたものである。extrusion のためのサブルーチンの多くは、流体シミュレーションのオープンソースコードである [Fluidity](http://fluidityproject.github.io/) に由来する。
 
@@ -56,7 +74,7 @@ __ActFEMtide__ はメッシュ生成に [Gmsh](https://www.soest.hawaii.edu/gmt/
 ## 2 重要事項 <a id="ImportantNotes"></a>
 座標系: X: 東向き, Y: 北向き, Z: 上向き
 
-__支配方程式:__ [5 支配方程式と離散化](#Governing_equation_and_discretization) を参照（[Minami et al. (2018, EPS)](#Minami2018) の送信源項を起電力項 $\sigma\,\mathbf{v}\times \mathbf{F}$ に変更）
+__支配方程式:__ [4 支配方程式](#Governing_equation) を参照（[Minami et al. (2018, EPS)](#Minami2018) の送信源項を起電力項 $\sigma\,\mathbf{v}\times \mathbf{F}$ に変更）
 
 __入力する地形データ:__ 経度 [deg], 緯度 [deg], 高度 [m, __下向き正__]
 
@@ -74,12 +92,30 @@ ghostscript （TMTGEM/Tohoku/flow 内の plot_z.sh などで使用する “gv�
 
 Debian 系の Linux ディストリビューションが使用できる場合、"sudo apt install ***" によって上記の環境をすべてインストールできる。
 
-## 4 "Kikai/" 内のサンプルコードの実行 <a id="Run_sample_simulations"></a>
+## 4 支配方程式 <a id="Governing_equation"></a>
+ActFEMtide のソルバーは __ActFEM__ [(Minami et al. 2018)](#Minami2018) と同じく、ベクトルポテンシャル $\mathbf{A}$ に関する誘導方程式を、四面体メッシュ上の辺要素（Nédélec 一次要素）有限要素法で周波数領域において解く。ActFEM との違いは右辺の励起源のみであり、ActFEM の送信源電流 $\mathbf{i}_s$ の代わりに、海水の運動により生じる起電力 $\sigma\,\mathbf{v}\times\mathbf{F}$ を与える。有限要素法による離散化の詳細は[付録A](#Appendix_discretization)にまとめた。
+
+導電率 $\sigma$ の海水が、背景磁場（地球主磁場）$\mathbf{F}$ の中を速度 $\mathbf{v}$ で運動するとき、オームの法則は
+
+$$\mathbf{j} = \sigma\left( \mathbf{E} + \mathbf{v}\times\mathbf{F} \right)$$
+
+となる。変位電流を無視したアンペールの法則 $\nabla\times\mathbf{B} = \mu\mathbf{j}$ に $\mathbf{B} = \nabla\times\mathbf{A}$ を代入し、ActFEM と同じ規約 $\mathbf{E} = i\omega\mathbf{A}$ で電場を表すと、ActFEMtide が解く支配方程式
+
+$$\nabla\times\left( \nabla\times\mathbf{A} \right) + i\omega\mu\sigma\mathbf{A} = \mu\sigma\left( \mathbf{v}\times\mathbf{F} \right) \cdot \cdot \cdot (4.1)$$
+
+が得られる。ここで $\omega$ は潮汐分潮の角周波数、$\mu$ は透磁率（真空の透磁率 $\mu_0$ を使用）である。ActFEM の式 $\nabla\times\nabla\times\mathbf{A} + i\omega\mu\sigma\mathbf{A} = \mu\mathbf{i}_s$ と比べると、送信源電流 $\mathbf{i}_s$ が起電力による電流 $\sigma\,\mathbf{v}\times\mathbf{F}$ に置き換わっている。
+
+- $\mathbf{v}$ は潮汐流速であり、[Egbert and Erofeeva (2002)](#EE2002) の潮汐モデルから得た複素振幅（振幅と位相）で与える。水平2成分のみを使用し、鉛直成分は $v_z = 0$ とする。
+- $\mathbf{F}$ は背景磁場（3成分、実数）である。
+- 起電力項は海洋要素（物理グループ 2）にのみ存在する。
+
+
+## 5 順計算のチュートリアル（Kikai/fwd_tide/） <a id="Forward_tutorial"></a>
 とにかく ActFEMtide を実行してみよう！！
 ActFEMtide のホームフォルダ内に、サンプルシミュレーション用の Kikai/ フォルダがある。
-そこにあるサンプルコードは、以下のいくつかのステップで実行される。
+ここでは、鬼海カルデラ周辺を対象として、潮汐モデルの準備・メッシュ生成・比抵抗構造の作成を経て、M2 潮汐による潮汐起源電磁場を順計算するまでを、以下のステップで実行する。Step 0〜5 で作成するファイルは、[6章](#Inversion_tutorial)の逆計算でもそのまま使う。
 
-### Step0 潮汐モデルの準備
+### 5.1 Step 0: 潮汐モデルの準備（ActFEMtide/mkfvxyz/） <a id="sec5_1"></a>
 [(Egbert and Erofeeva, 2002)](#EE2002) のコードを ActFEMtide/mkfvxyz/ 内でコンパイルする
 ####  
     $cd mkfvxyz
@@ -92,40 +128,42 @@ triton で作業している場合は、ActFEMtide/mkfvxyz/OTPS/ 内で以下の
 DATA フォルダ内に、以下のファイルが準備されていることを確認すること:
 
 
-### Step 1: 「地形データの準備」(ActFEMtide/Kikai/topo/)
+### 5.2 Step 1: 地形データの準備（Kikai/topo/） <a id="sec5_2"></a>
 #### etopo の grd ファイルを ascii 形式の *.xyz ファイルに変換する
     $cd Kikai/topo
     $./mk_etopo_kikai.sh        (etopo_kikai-l.xyz が生成される)
 
-### Step 2: 四面体メッシュの生成 (ActFEMtide/Kikai/mesh/)
+### 5.3 Step 2: 四面体メッシュの生成（Kikai/mesh/） <a id="sec5_3"></a>
 #### 四面体メッシュの生成
     $cd ../mesh
     $./tetmeshgen.sh             (em3d.msh 等が生成される)
 使用しているPCのスペックによっては、これにはしばらく時間がかかる。多くのファイルが生成されるが、鍵となる三次元四面体メッシュファイルは "em3d.msh" である。メッシュファイルをローカルにダウンロードし、以下のステップで確認すること。
+メッシュ生成のパラメータはすべて制御ファイル Kikai/mesh/mesh.ctl で与える。メッシュ生成の流れと各パラメータの意味は[付録B](#Appendix_mesh)を参照。
 
-### Step 3: 生成されたメッシュファイルの確認
+### 5.4 Step 3: 生成されたメッシュファイルの確認（Kikai/mesh/） <a id="sec5_4"></a>
 #### ActFEM/Kikai/mesh 内のファイルをダウンロードした後
     $gmsh em3d.msh
 
 メッシュの生成に成功していれば、メッシュを見ることができる。
 
-### Step 4: 比抵抗構造の作成 (ActFEMtide/Kikai/structure/)
+### 5.5 Step 4: 比抵抗構造の作成（Kikai/structure/） <a id="sec5_5"></a>
 #### 生成したメッシュをもとに比抵抗構造を作成する
     $cd ../structure
     $./change_model2cond.sh     (cond_homo.msh と cond_test.msh が生成される)
 パラメータは change_model2cond.sh の中の制御ファイル部分を参照すること。
 
-### Step 5: 潮汐流と背景磁場の準備 (ActFEMtide/Kikai/fvxyz/)
+### 5.6 Step 5: 潮汐流と背景磁場の準備（Kikai/fvxyz/） <a id="sec5_6"></a>
 ####
     $cd ../fvxyz
     $./mkfvxyz_mesh.sh
 
-### Step 6: ActFEMtide の実行 (ActFEMtide/Kikai/fwd_tide/)
+### 5.7 Step 6: 順計算の実行（Kikai/fwd_tide/） <a id="sec5_7"></a>
 ####
     $cd ../fwd_tide
     $./run_fwd.sh
+計算の設定は制御ファイル tide_fwd.ctl で与える（[7章](#Forward_control)）。結果は result/ に出力される（[7.4節](#sec7_4)）。
 
-### Step 7: 結果の確認 (ActFEMtide/Kikai/fwd_tide/)
+### 5.8 Step 7: 結果の確認（Kikai/fwd_tide/） <a id="sec5_8"></a>
     $./plot_bxyz.sh
     $./plot_ixyh.sh
 以下の2つの図が生成される。
@@ -136,119 +174,7 @@ DATA フォルダ内に、以下のファイルが準備されていることを
 ![Fig.2](./images/ixyh.png)
 図2. M2潮汐による磁場・電場の実部および虚部。この図は plot_ixyh.sh により生成される。
 
-## 5 支配方程式と離散化 <a id="Governing_equation_and_discretization"></a>
-ActFEMtide のソルバーは __ActFEM__ [(Minami et al. 2018)](#Minami2018) と同じく、ベクトルポテンシャル $\mathbf{A}$ に関する誘導方程式を、四面体メッシュ上の辺要素（Nédélec 一次要素）有限要素法で周波数領域において解く。ActFEM との違いは右辺の励起源のみであり、ActFEM の送信源電流 $\mathbf{i}_s$ の代わりに、海水の運動により生じる起電力 $\sigma\,\mathbf{v}\times\mathbf{F}$ を与える。以下、離散化の導出は ActFEM マニュアル（v1.5、付録A・B）に従う。有限要素法（特に辺要素を用いた電磁場解析）を初めて学ぶ読者には、[本間・五十嵐・川口 (2002)『数値電磁力学：基礎と応用』](#Honma2002) が分かりやすい入門書として薦められる。
-
-### 5.1 支配方程式 <a id="sec5_1"></a>
-導電率 $\sigma$ の海水が、背景磁場（地球主磁場）$\mathbf{F}$ の中を速度 $\mathbf{v}$ で運動するとき、オームの法則は
-
-$$\mathbf{j} = \sigma\left( \mathbf{E} + \mathbf{v}\times\mathbf{F} \right)$$
-
-となる。変位電流を無視したアンペールの法則 $\nabla\times\mathbf{B} = \mu\mathbf{j}$ に $\mathbf{B} = \nabla\times\mathbf{A}$ を代入し、ActFEM と同じ規約 $\mathbf{E} = i\omega\mathbf{A}$ で電場を表すと、ActFEMtide が解く支配方程式
-
-$$\nabla\times\left( \nabla\times\mathbf{A} \right) + i\omega\mu\sigma\mathbf{A} = \mu\sigma\left( \mathbf{v}\times\mathbf{F} \right) \cdot \cdot \cdot (5.1)$$
-
-が得られる。ここで $\omega$ は潮汐分潮の角周波数、$\mu$ は透磁率（真空の透磁率 $\mu_0$ を使用）である。ActFEM の式 $\nabla\times\nabla\times\mathbf{A} + i\omega\mu\sigma\mathbf{A} = \mu\mathbf{i}_s$ と比べると、送信源電流 $\mathbf{i}_s$ が起電力による電流 $\sigma\,\mathbf{v}\times\mathbf{F}$ に置き換わっている。
-
-- $\mathbf{v}$ は潮汐流速であり、[Egbert and Erofeeva (2002)](#EE2002) の潮汐モデルから得た複素振幅（振幅と位相）で与える。水平2成分のみを使用し、鉛直成分は $v_z = 0$ とする。
-- $\mathbf{F}$ は背景磁場（3成分、実数）である。
-- 起電力項は海洋要素（物理グループ 2）にのみ存在する。
-
-### 5.2 弱形式 <a id="sec5_2"></a>
-ガラーキン法では、試験関数 $\mathbf{w}$（辺要素基底関数）をかけて計算領域 $\Omega$ で積分した
-
-$$\int_{\Omega}\mathbf{w}\cdot\left\{ \nabla\times\nabla\times\mathbf{A} + i\omega\mu\sigma\mathbf{A} - \mu\sigma\left( \mathbf{v}\times\mathbf{F} \right) \right\}dV = 0 \cdot \cdot \cdot (5.2)$$
-
-を解く。第1項を部分積分すると、
-
-$$\int_{\Omega}\mathbf{w}\cdot\left( \nabla\times\nabla\times\mathbf{A} \right)dV = \int_{\partial\Omega}\left( \mathbf{B}\times\mathbf{w} \right)\cdot\mathbf{n}\,dS + \int_{\Omega}\left( \nabla\times\mathbf{w} \right)\cdot\left( \nabla\times\mathbf{A} \right)dV$$
-
-となる。計算領域の外側境界 $\partial\Omega$ では ActFEM と同様に $\mathbf{n}\cdot\left( \mathbf{B}\times\mathbf{w} \right) = \mathbf{w}\cdot\left( \mathbf{n}\times\mathbf{B} \right) = 0$ とおけるため（境界を貫く電流がないことに対応）、境界積分は消える。したがって弱形式は
-
-$$\int_{\Omega}\left( \nabla\times\mathbf{w} \right)\cdot\left( \nabla\times\mathbf{A} \right)dV + i\omega\mu\int_{\Omega}\sigma\,\mathbf{w}\cdot\mathbf{A}\,dV = \mu\int_{\Omega}\sigma\,\mathbf{w}\cdot\left( \mathbf{v}\times\mathbf{F} \right)dV \cdot \cdot \cdot (5.3)$$
-
-となる。境界では $\mathbf{A}$ の接線成分を 0 とする（Dirichlet 条件）。計算領域は十分大きくとる必要がある。
-
-### 5.3 辺要素による離散化 <a id="sec5_3"></a>
-計算領域を四面体要素に分割し、$e$ 番目の要素 $\Omega_e$ 内のベクトルポテンシャルを、6本の辺に対応する辺要素基底関数 $\mathbf{w}_j$ で
-
-$$\mathbf{A}_e = \sum_{j=1}^{6}\mathbf{w}_j\left\lbrack Al \right\rbrack_j, \qquad \mathbf{w}_j = \mathbf{w}_{kl} = \lambda_k\nabla\lambda_l - \lambda_l\nabla\lambda_k \cdot \cdot \cdot (5.4)$$
-
-と展開する。ここで $\lambda_k$ は節点 $k$ の一次節点基底関数（体積座標）、未知数 $\left\lbrack Al \right\rbrack_j$ は辺 $j$ に沿った $\mathbf{A}$ の線積分である。辺番号 $j$ と節点番号 $(k, l)$、対辺 $(m, n)$ の対応は下図と表5.1の通りであり、ActFEM と同じである。
-
-<img src="./images/edge_numbering.png" width="55%">
-
-表5.1.
-
-| 辺番号 $j$ | $k$ | $l$ | $m$ | $n$ |
-|:----------:|:---:|:---:|:---:|:---:|
-| 1          | 1   | 2   | 3   | 4   |
-| 2          | 2   | 3   | 1   | 4   |
-| 3          | 1   | 3   | 4   | 2   |
-| 4          | 1   | 4   | 2   | 3   |
-| 5          | 2   | 4   | 3   | 1   |
-| 6          | 3   | 4   | 1   | 2   |
-
-式(5.4)を式(5.3)に代入すると、要素ごとの方程式
-
-$$\left\{ \left\lbrack M_e \right\rbrack + i\omega\mu\sigma_e\left\lbrack N_e \right\rbrack \right\}\left\lbrack \mathbf{Al}_e \right\rbrack = \mathbf{s}_e \cdot \cdot \cdot (5.5)$$
-
-が得られる。$\sigma_e$ は要素 $e$ の導電率（要素内一定）である。要素行列は解析的に計算できる。
-
-$$\left\lbrack M_e \right\rbrack_{ij} = \int_{\Omega_e}\left( \nabla\times\mathbf{w}_i \right)\cdot\left( \nabla\times\mathbf{w}_j \right)dV = \frac{1}{9v}\,\mathbf{x}_{mn}\cdot\mathbf{x}_{m'n'} \cdot \cdot \cdot (5.6)$$
-
-$$\left\lbrack N_e \right\rbrack_{ij} = \int_{\Omega_e}\mathbf{w}_i\cdot\mathbf{w}_j\,dV = \nabla\lambda_l\cdot\nabla\lambda_{l'}\int_{\Omega_e}\lambda_k\lambda_{k'}dV - \nabla\lambda_l\cdot\nabla\lambda_{k'}\int_{\Omega_e}\lambda_k\lambda_{l'}dV - \nabla\lambda_k\cdot\nabla\lambda_{l'}\int_{\Omega_e}\lambda_l\lambda_{k'}dV + \nabla\lambda_k\cdot\nabla\lambda_{k'}\int_{\Omega_e}\lambda_l\lambda_{l'}dV \cdot \cdot \cdot (5.7)$$
-
-ここで $(k,l,m,n)$ は辺 $i$、$(k',l',m',n')$ は辺 $j$ に対応する節点番号、$v$ は四面体の体積、$\mathbf{x}_{mn}$ は節点 $m$ から $n$ へのベクトルである。導出には次の関係を用いる。
-
-$$\nabla\times\mathbf{w}_j = 2\nabla\lambda_k\times\nabla\lambda_l = \frac{1}{3v}\mathbf{x}_{mn}, \qquad \int_{\Omega_e}\lambda_k\lambda_l\,dV = \begin{cases} v/20 & (k\neq l) \\ v/10 & (k = l) \end{cases} \cdot \cdot \cdot (5.8)$$
-
-辺の向きは、要素ローカルの辺と全体の辺（line）の向きが逆の場合に符号 $-1$ をかけて揃える。要素行列を全要素について重ね合わせて得られる全体の連立一次方程式（複素対称）を、PARDISO で解く。
-
-各要素の導電率 $\sigma_e$ は物理グループで決まる。
-
-| 物理グループ | 領域 | $\sigma_e$ |
-|:----:|:----|:----|
-| 1 | 空気 | 制御ファイルで与える $\sigma_\mathrm{air}$ |
-| 2 | 海洋 | 3.33 S/m（ソース内で固定） |
-| 3 以上 | 陸・海底下 | 制御ファイルの値、または比抵抗ファイル（cond.msh）の値 |
-
-### 5.4 潮汐起電力項（右辺ベクトル） <a id="sec5_4"></a>
-右辺ベクトルの要素寄与は
-
-$$s_i^e = \mu\sigma_e\int_{\Omega_e}\mathbf{w}_i\cdot\left( \mathbf{v}\times\mathbf{F} \right)dV \cdot \cdot \cdot (5.9)$$
-
-である。ActFEM では送信源が線電流（ヘヴィサイド関数）であったため、この積分は送信ケーブルが貫く要素だけで評価していた。ActFEMtide では起電力が海洋全体に分布するため、海洋要素すべてで評価する。各節点 $p$ における流速 $\mathbf{v}_p$ と背景磁場 $\mathbf{F}_p$ から節点値 $\left( \mathbf{v}\times\mathbf{F} \right)_p = \mathbf{v}_p\times\mathbf{F}_p$ を計算し、要素内では節点基底関数で一次補間する。
-
-$$\left( \mathbf{v}\times\mathbf{F} \right)(\mathbf{r}) \simeq \sum_{p=1}^{4}\lambda_p(\mathbf{r})\left( \mathbf{v}\times\mathbf{F} \right)_p \cdot \cdot \cdot (5.10)$$
-
-式(5.10)と $\mathbf{w}_i = \lambda_k\nabla\lambda_l - \lambda_l\nabla\lambda_k$ を式(5.9)に代入すると、$\nabla\lambda$ が要素内で一定であることから
-
-$$s_i^e = \mu\sigma_e\sum_{p=1}^{4}\left\{ \left( \int_{\Omega_e}\lambda_k\lambda_p\,dV \right)\nabla\lambda_l\cdot\left( \mathbf{v}\times\mathbf{F} \right)_p - \left( \int_{\Omega_e}\lambda_l\lambda_p\,dV \right)\nabla\lambda_k\cdot\left( \mathbf{v}\times\mathbf{F} \right)_p \right\} \cdot \cdot \cdot (5.11)$$
-
-となり、式(5.8)の積分公式を用いて解析的に計算できる。$\mathbf{v}$ が複素数のため、$s_i^e$ も複素数となる。海洋以外の要素では $s_i^e = 0$ である。
-
-### 5.5 スケーリングと単位 <a id="sec5_5"></a>
-ActFEM と同様に、スケーリング長 $L = 1000$ m を用いて座標を km 単位で扱う（ActFEM マニュアル付録B）。$\nabla = \nabla'/L$、$\mathbf{w} = \mathbf{w}'/L$、$dV = L^3dV'$ と置き換えると、式(5.5)は
-
-$$\sum_{j=1}^{6}\left\{ \left\lbrack M_e' \right\rbrack_{ij} + L^2 i\omega\mu\sigma_e\left\lbrack N_e' \right\rbrack_{ij} \right\}\left\lbrack Al' \right\rbrack_j = \mu\sigma_e L^2\int_{\Omega_e}\mathbf{w}_i'\cdot\left( \mathbf{v}\times\mathbf{F} \right)dV' \cdot \cdot \cdot (5.12)$$
-
-となる。ここで $'$ は km 単位の座標で構成した量を表す。
-
-入力の単位は流速 $\mathbf{v}$ [m/s]、背景磁場 $\mathbf{F}$ [nT] であり、$\mathbf{v}\times\mathbf{F}$ は [nV/m] で与えられる。一方、ActFEMtide は電場を [mV/km]（= [μV/m]）で出力する。このためコード（src/solver_mpi/forward_bxyz_mpi.f90 の GENMAT）では、式(5.12)の右辺に次の係数をかけている。
-
-$$L^2 \times 10^{6} \times 10^{-9} = 10^{6}\,[\mathrm{m^2/km^2}] \times 10^{6}\,[(\mathrm{mV/km})/(\mathrm{V/m})] \times 10^{-9}\,[(\mathrm{V/m})/(\mathrm{nV/m})] = 10^{3}$$
-
-### 5.6 電場・磁場・電流の計算 <a id="sec5_6"></a>
-連立方程式を解いて $\left\lbrack Al \right\rbrack$ が求まった後、観測点を含む要素内で式(5.4)により $\mathbf{A}$ を補間し、電場を $\mathbf{E} = i\omega\mathbf{A}$、磁場を $\mathbf{B} = \nabla\times\mathbf{A}$ から求める。
-
-海洋中の電流には、誘導電場 $\mathbf{E}$ による寄与と起電力 $\mathbf{v}\times\mathbf{F}$ による寄与の両方が含まれる（5.1節のオームの法則）。plot_ixyh.sh で描く水平電流（深さ積分）は、水深 $h$ を用いて
-
-$$\mathbf{I}_h = \sigma h\left( \mathbf{E}_h + \left( \mathbf{v}\times\mathbf{F} \right)_h \right)$$
-
-として計算し、$\sigma h\mathbf{E}_h$ と $\sigma h(\mathbf{v}\times\mathbf{F})_h$ の各成分も出力する（src/solver_mpi/n_ebfem_bxyz_mpi.f90）。
-
-## 6 インバージョンのチュートリアル <a id="Inversion_tutorial"></a>
+## 6 逆計算（インバージョン）のチュートリアル（Kikai/inv_*/） <a id="Inversion_tutorial"></a>
 ActFEMtide のインバージョンコード（src/src_inv_joint/ebfem_inv_joint.exe）は、潮汐起源電磁場データ、MT データ、またはその両方から比抵抗構造を推定する。Kikai/ には次の3つのサンプルがある。
 
 | フォルダ | 使用データ | ijoint | 標準入力に与えるファイル（順番） | MPI プロセス数 |
@@ -257,14 +183,14 @@ ActFEMtide のインバージョンコード（src/src_inv_joint/ebfem_inv_joint
 | Kikai/inv_mt/ | MT インピーダンスのみ | 2 | mt.ctl, joint.ctl | 6 |
 | Kikai/inv_joint/ | 潮汐起源磁場 + MT インピーダンス | 3 | tide_fwd.ctl, mt.ctl, joint.ctl | 6 |
 
-- 実行プログラムには、まず ijoint（1: 潮汐のみ、2: MT のみ、3: 両方）を与え、続けて順計算の制御ファイルとインバージョン制御ファイル（joint.ctl、[7章](#Inversion_control)）のパスを与える。
-- tide_fwd.ctl は潮汐順計算（4章 Step 6）と同じ形式の制御ファイルであり、メッシュ、観測点、周波数などを指定する。mt.ctl は MT 順計算の制御ファイルである。インバージョンの比抵抗モデル（初期モデル・参照モデル）は joint.ctl で指定する。
+- 実行プログラムには、まず ijoint（1: 潮汐のみ、2: MT のみ、3: 両方）を与え、続けて順計算の制御ファイルとインバージョン制御ファイル（joint.ctl、[8章](#Inversion_control)）のパスを与える。
+- tide_fwd.ctl は潮汐順計算（[5.7節](#sec5_7)、[7章](#Forward_control)）と同じ形式の制御ファイルであり、メッシュ、観測点、周波数などを指定する。mt.ctl は MT 順計算の制御ファイルである。インバージョンの比抵抗モデル（初期モデル・参照モデル）は joint.ctl で指定する。
 - MPI は周波数ごとの並列化に使われる。潮汐（1周波数）と MT（5周波数）を合わせた周波数の数以下のプロセス数にするとよい。
 
 以下のサンプルでは、真の構造（cond_test.msh）から順計算で作った合成データを、一様構造（cond_homo.msh）を初期モデルとして逆解析する。
 
 ### 6.1 Step 1: 準備（メッシュ・比抵抗構造・潮汐流） <a id="sec6_1"></a>
-4章の Step 1〜5 を済ませておく。インバージョンでは次のファイルを使う。
+[5章](#Forward_tutorial)の Step 0〜5（[5.1](#sec5_1)〜[5.6節](#sec5_6)）を済ませておく。インバージョンでは次のファイルを使う。
 
 - Kikai/mesh/ のメッシュファイル（em3d.msh, polygonz.msh, lineinfo.dat, ocean.msh など）
 - Kikai/structure/ の cond_homo.msh（一様 100 Ω·m、初期・参照モデル）と cond_test.msh（真の構造）
@@ -275,7 +201,7 @@ ActFEMtide のインバージョンコード（src/src_inv_joint/ebfem_inv_joint
     $./run_fwd.sh           (真の構造 cond_test.msh での順計算。result/P5_S1.dat などが生成される)
     $./generr_tide.sh       (data_inv/P5_tide_amp.dat, P5_tide_pha.dat などが生成される)
 
-generr_tide.sh は順計算結果の振幅・位相に誤差（振幅の 10%、ratio で指定）を付けて、インバージョン用のデータファイルを作る。データファイルの形式は [7.4節](#sec7_4) を参照。
+generr_tide.sh は順計算結果の振幅・位相に誤差（振幅の 10%、ratio で指定）を付けて、インバージョン用のデータファイルを作る。データファイルの形式は [8.4節](#sec8_4) を参照。
 
 ### 6.3 Step 3: MT の合成データの作成（Kikai/fwd_mt/） <a id="sec6_3"></a>
 inv_mt と inv_joint を実行する場合に必要である。
@@ -312,7 +238,7 @@ run_inv.sh は src/src_inv_joint/ をコンパイルし、clean.sh で result_in
     joint.ctl
     EOF
 
-inv_mt/joint.ctl では、潮汐データの項目を "##" でコメントアウトしている。ijoint = 1 の inv_tide/joint.ctl には MT データの項目を書かない（[7.1節](#sec7_1)）。
+inv_mt/joint.ctl では、潮汐データの項目を "##" でコメントアウトしている。ijoint = 1 の inv_tide/joint.ctl には MT データの項目を書かない（[8.1節](#sec8_1)）。
 
 反復は、すべてのデータの正規化 RMS が final rms を下回るか、反復回数が 20 回（ソース内で固定）に達すると終了する。
 
@@ -337,15 +263,172 @@ RMS の推移と比抵抗構造の断面は次のように描く。
 
 view_slice.sh の冒頭にある z_elevation, y_slice, x_slice などで、断面の位置と範囲を変更できる。なお、plot_fit_MT.sh, plot_fit_active.sh, plot_rho_pha.sh は ActFEM から引き継いだスクリプトであり、Kikai の観測点名には対応していない。
 
-## 7 インバージョン制御ファイル（joint.ctl） <a id="Inversion_control"></a>
+## 7 順計算の制御ファイル（tide_fwd.ctl） <a id="Forward_control"></a>
+順計算プログラム（src/solver_mpi/ebfem_bxyz_mpi.exe）は、標準入力から制御ファイルのパスを1つ受け取る（[5.7節](#sec5_7)の run_fwd.sh を参照）。インバージョン（[6章](#Inversion_tutorial)）でも、同じ形式の tide_fwd.ctl を潮汐順計算の設定として読む。読み込みは src/common/m_param.f90 の readparam で行われる。
+
 ### 7.1 共通の規則 <a id="sec7_1"></a>
+- "##" で始まる行はコメントとして読み飛ばされる。"#" 1文字で始まる行（例: "# of topofile"）はコメントではない。
+- 各行の1〜20列目は項目名（ラベル）で、プログラムは読まない。値は21列目以降に書く。20列目の "!" や "|" は区切りの目印にすぎない。
+- 項目は決まった順番で読まれる。行の追加・削除や順番の入れ替えをしてはいけない。ただし、フラグの値によって読まれる行数が変わる項目がある（下表の「条件」）。
+- コメントを除いた制御ファイルは、実行したフォルダに tmp.ctl として書き出される。
+- 座標は X: 東向き、Y: 北向き、Z: 上向き（[2章](#ImportantNotes)）。x, y は原点（lonlatorigin）からの距離 [km] である。
+
+### 7.2 項目一覧 <a id="sec7_2"></a>
+**A. 地形・メッシュ・入出力ファイル**
+
+| 項目（ラベル） | 説明 |
+|:--|:--|
+| itopofile 0 or 1 | 1: 地形ファイルを与える（次の行から地形ファイルの指定）、0: 地形ファイルを与えない（次の3行は書かない）。 |
+| # of topofile | 地形ファイルの数。ファイルごとに次の2行を繰り返す。 |
+| topofile | 地形ファイルのパス。 |
+| lon lat shift | 地形ファイルの経度・緯度のずらし量 [deg]。 |
+| mesh file | 三次元四面体メッシュ（em3d.msh）。 |
+| 2d triangle z file | 地形を反映した二次元三角形メッシュ（polygonz.msh）。観測点の z 座標の計算に使う。 |
+| local line file | em3d.msh の辺の情報（lineinfo.dat）。 |
+| Ocean mesh file. | 海洋の三次元メッシュ（ocean.msh）。節点数を vxyz, fxyz ファイルの読み込みに使う。 |
+| mesh ctl file | メッシュ生成に用いた制御ファイル（mesh.ctl、[付録B](#Appendix_mesh)）。 |
+| Vxyzfile | 海洋メッシュの節点における潮汐流速 $\mathbf{v}$（Kikai/fvxyz/ で作成、[5.6節](#sec5_6)）。 |
+| Fxyzfile | 海洋メッシュの節点における背景磁場 $\mathbf{F}$（同上）。 |
+| output folder | 結果の出力フォルダ（例: ./result/）。末尾に "/" を付ける。 |
+| header2d, header3d | ActFEM から引き継いだ項目。現在は使われないが、行は必要。 |
+
+itopofile、# of topofile、topofile、lon lat shift は読み込まれるが、現在の順計算では使われない（地形はメッシュに反映済み）。
+
+**B. 周波数と計算領域**
+
+| 項目（ラベル） | 説明 |
+|:--|:--|
+| # of frequency | 周波数の数。続けて周波数の数だけ "Frequency [Hz]" の行を書く。 |
+| Frequency [Hz] | 計算する周波数 [Hz]。サンプルは M2 分潮（周期 12.42 時間、$2.237\times10^{-5}$ Hz）。 |
+| west/east/south/north bound | 内側の領域の x の西端・東端、y の南端・北端 [km]。平面分布の出力範囲（D）に使う。 |
+| lenout [km] | 現在は使われないが、行は必要（以前は計算境界の位置の決定に使っていた）。 |
+| upz in, downz in [km] | 現在は使われないが、行は必要。 |
+| zmax, zmin [km] | 現在は使われないが、行は必要（以前は計算境界の位置の決定に使っていた）。 |
+| sizein ～ A_src | sizein, sizebo, sigma_obs, A_obs, dlen_source, sigma_src, A_src の7行は ActFEM のメッシュ生成から引き継いだ項目であり、現在は使われないが、行は必要。 |
+
+計算境界（Dirichlet 境界条件）は、三次元メッシュ em3d.msh の節点座標の最大・最小値（xyzminmax）から自動的に決まる。ソルバーは、メッシュの外側の6面（x = xmin, xmax、y = ymin, ymax、z = zmin, zmax）上（0.01 km の許容幅。MT の境界と同じ）にある辺で $\mathbf{A}$ の接線成分を 0 とする（src/solver_mpi/forward_bxyz_mpi.f90、インバージョンでは src/src_inv_joint/forward_joint.f90 の GENBCCSEM）。制御ファイルの lenout、zmax、zmin は境界条件に影響しない。
+
+**C. 観測点**
+
+| 項目（ラベル） | 説明 |
+|:--|:--|
+| # of observatory | 観測点の数。 |
+| lonlat(1),xyz (2) | 観測点座標の与え方 lonlatflag。0: 経度・緯度を、原点を中心とした正距円筒図法で x, y [km] に変換する、1: 経度・緯度を UTM 座標で x, y [km] に変換する、2: x, y [km] を直接与える。 |
+| UTM ZONE | UTM のゾーン（例: 52N）。lonlatflag = 1 のときだけ使われるが、行は常に必要。 |
+| lonlatorigin | 原点の経度・緯度 [deg]。 |
+| Name | 観測点名。観測点ごとに次の行と組で繰り返す。 |
+| xyz | lonlatflag = 0, 1 のとき経度 [deg]、緯度 [deg]、z [km]。lonlatflag = 2 のとき x, y, z [km]。 |
+
+観測点の z は、地表（海域では海底）からの相対値 [km] である。二次元三角形メッシュ（2d triangle z file）から観測点の位置の地表の z を求め、それに加えた値が観測点の z 座標になる（src/common/calzobsr.f90）。サンプルの -0.001 は海底下 1 m を意味する。Name・xyz の行頭の "12" や "11" はラベル部分（1〜20列目）にあるので、読まれない。
+
+**D. 平面分布の出力**
+
+| 項目（ラベル） | 説明 | 条件 |
+|:--|:--|:--|
+| 0:no,1:nxny,2:ntrik | ixyflag。0: 出力しない、1: 内側の領域を nx × ny の格子に分けて出力する、2: 地表の三角形すべてについて出力する。 | |
+| file head | 出力ファイル名の頭（例: bxyz_xy2D）。 | ixyflag = 1, 2 |
+| nx, ny | x, y 方向の格子数。格子点は各セルの中心。 | ixyflag = 1 |
+| 1:same z,2:seafloor | ixydepth。1: 一定の z で出力する（次の行に z [km] を書く）、2: 海底（地表）の直下で出力する。 | ixyflag = 1 |
+| ki23dfile | 二次元三角形メッシュ（polygonki.msh）のパス。 | ixyflag = 1, 2 |
+| nx,ny->ki23dptr fl | 二次元メッシュと海洋メッシュの節点の対応ファイル（ki23dptr.dat）のパス。 | ixyflag = 1, 2 |
+
+ixyflag = 2 の場合は、file head の次に ki23dfile と ki23dptr ファイルの2行を書く。
+
+**E. 送信源**
+
+ActFEM から引き継いだ電流ダイポール送信源の項目である。潮汐の計算では送信源の電流は使われない（右辺は起電力 $\sigma\,\mathbf{v}\times\mathbf{F}$、[4章](#Governing_equation)）。ただし送信源の数と名前は出力ファイル名（例: P5_S1.dat の "S1"）に使われるため、送信源を1つ書いておく。
+
+| 項目（ラベル） | 説明 |
+|:--|:--|
+| # of sources | 送信源の数（潮汐では 1）。送信源ごとに次の3行を繰り返す。 |
+| Source Name | 送信源名（出力ファイル名に使われる）。 |
+| source start point, source end point | 送信源の始点・終点。lonlatflag = 1 のとき経度・緯度 [deg] と z [km]、それ以外は x, y, z [km]。 |
+| Elcetric current[A] | 送信電流 [A]。潮汐の計算では使われない（サンプルは 0.0）。 |
+
+**F. 比抵抗構造**
+
+| 項目（ラベル） | 説明 | 条件 |
+|:--|:--|:--|
+| sigma_air [S/m] | 空気（物理グループ 1）の導電率 [S/m]。 | |
+| condflag 0:home,1: | 0: 陸・海底下を物理グループごとに一様な導電率で与える、1: 比抵抗ファイルで与える。 | |
+| nvolume | 陸・海底下の物理グループの数。続けてその数だけ導電率 [S/m] を1行に1つ書く。 | condflag = 0 |
+| condfile | 比抵抗ファイル（Kikai/structure/ の cond_*.msh、[5.5節](#sec5_5)）のパス。 | condflag = 1 |
+
+海洋（物理グループ 2）の導電率は 3.33 S/m にソース内で固定されている（[付録A.2](#secA_2)）。
+
+### 7.3 例（Kikai/fwd_tide/tide_fwd.ctl の一部） <a id="sec7_3"></a>
+    ##-----10!-------20!
+    itopofile 0 or 1   !1
+    # of topofile      !1
+    topofile           !../topo/etopo_kikai-l.xyz
+    lon lat shift      !0.0         0.0
+    mesh file          !../mesh/em3d.msh
+    2d triangle z file !../mesh/polygonz.msh
+    local line file    !../mesh/lineinfo.dat
+    Ocean mesh file.   !../mesh/ocean.msh
+    mesh ctl file      !../mesh/mesh.ctl
+    Vxyzfile           !../fvxyz/vxyz_mesh
+    Fxyzfile           !../fvxyz/fxyz_mesh
+    output folder      !./result/
+    header2d  (a50)    !nakadake2d
+    header3d  (a50)    !nakadake3d
+    # of frequency     !1
+    Frequency [Hz]     !0.00002237
+    west bound         !-200.0
+    east bound         !200.0
+    south bound        !-200.0
+    north bound        !200.0
+    lenout [km]        !100.0
+    upz in [km]  (>0)  !500.0
+    downz in [km](<0)  !-500.0
+    zmax   [km]        !1000.0
+    zmin   [km]        !-1000.0
+    （中略：sizein 〜 A_src の7行）
+    # of observatory   !14
+    lonlat(1),xyz (2)  !0
+    UTM ZONE           |52N
+    lonlatorigin       !130.000000     30.500000
+    12  Name           !P5
+    12  xyz            !130.3583       30.6500        -0.001
+    （中略：P6〜P18）
+    0:no,1:nxny,2:ntrik!1
+    file head          !bxyz_xy2D
+    nx, ny             !200        200
+    1:same z,2:seafloor!2
+    ki23dfile          !../mesh/polygonki.msh
+    nx,ny->ki23dptr fl !../mesh/ki23dptr.dat
+    # of sources       !1
+    Source Name        !S1
+    source start point !189.354722   -24.33944  -0.001
+    source end   point !189.254722   -24.33944  -0.001
+    Elcetric current[A]!0.0
+    sigma_air    [S/m] !1.e-8
+    condflag 0:home,1: !1
+    ##nvolume            !1
+    ##cond               !0.01
+    condfile           !../structure/cond_test.msh
+
+### 7.4 出力ファイル <a id="sec7_4"></a>
+output folder に次のファイルが出力される（ファイル名の \<freq\> は周波数を e9.2 形式で書いたもの。例: 0.22E-04）。
+
+| ファイル | 内容 |
+|:--|:--|
+| \<観測点名\>_\<送信源名\>.dat（例: P5_S1.dat） | 観測点での応答。1行が1周波数で、「周波数 [Hz]、Bx, By, Bz, Ex, Ey の振幅と位相（各成分 振幅 位相 の順）」の 11 列。 |
+| \<file head\>\<freq\>_\<送信源番号\>.dat（例: bxyz_xy2D0.22E-04_S1.dat） | 平面分布（ixyflag ≥ 1）。1行が1点で、「x, y [km]、Bx, By, Bz, Ex, Ey の振幅と位相」の 12 列。plot_bxyz.sh で描く。 |
+| ixyh_xy2D\<freq\>.dat | 平面分布（ixyflag ≥ 1）。海洋中の深さ積分した水平電流などの複素数値（[付録A.5](#secA_5)）。plot_ixyh.sh で描く。 |
+| fwd.log | 実行ログ（run_fwd.sh が出力）。 |
+
+磁場の単位は nT、電場の単位は mV/km（[付録A.4](#secA_4)）。
+
+## 8 インバージョン制御ファイル（joint.ctl） <a id="Inversion_control"></a>
+### 8.1 共通の規則 <a id="sec8_1"></a>
 - "##" で始まる行はコメントとして読み飛ばされる。"#" 1文字で始まる行（例: "# of srces for inv"）はコメントではない。
 - 各行の1〜20列目は項目名（ラベル）で、プログラムは読まない。値は21列目以降に書く。20列目の "!" や "|" は区切りの目印にすぎない。
 - 項目は決まった順番で読まれる。行の追加・削除や順番の入れ替えをしてはいけない。ある項目を使わない場合は、その行を "##" でコメントアウトする。
-- ijoint によって読まれる部分が変わる。潮汐データの部分（[7.2節](#sec7_2) の B）は ijoint = 1, 3 のとき、MT データの部分（C）は ijoint = 2, 3 のときだけ読まれる。読まれない部分は削除するか "##" でコメントアウトする。
+- ijoint によって読まれる部分が変わる。潮汐データの部分（[8.2節](#sec8_2) の B）は ijoint = 1, 3 のとき、MT データの部分（C）は ijoint = 2, 3 のときだけ読まれる。読まれない部分は削除するか "##" でコメントアウトする。
 - モデル分割（D）の座標値は、ラベルなしで1列目から書く。
 
-### 7.2 項目一覧 <a id="sec7_2"></a>
+### 8.2 項目一覧 <a id="sec8_2"></a>
 **A. 共通（モデル・正則化）**
 
 | 項目（ラベル） | 説明 |
@@ -400,7 +483,7 @@ ialphaflag = 1 の場合は、alpha init と factor の2行の代わりに、alp
 
 x, y は tide_fwd.ctl（または mt.ctl）の原点（lonlatorigin）からの距離で、東・北向きが正である。モデルブロックは比抵抗ファイル（cond.msh）に含まれる陸・海底下の要素に作られ、空気と海洋の導電率は固定される。icombine = -1 の場合は、z 座標の後に、内側領域の x の始点・終点・間隔、y の始点・終点・間隔（各1行）、内側の z 境界の数とその z 座標を続けて書く。
 
-### 7.3 例（Kikai/inv_joint/joint.ctl の一部） <a id="sec7_3"></a>
+### 8.3 例（Kikai/inv_joint/joint.ctl の一部） <a id="sec8_3"></a>
     ##-----10!-------20!
     face info file     !../../mesh_joint/faceinfo.dat
     1:cond,2:model     !1
@@ -441,7 +524,7 @@ x, y は tide_fwd.ctl（または mt.ctl）の原点（lonlatorigin）からの�
     ioutlevel:0,1:Jacob|0
     final rms          |1.0
 
-### 7.4 データファイルの形式 <a id="sec7_4"></a>
+### 8.4 データファイルの形式 <a id="sec8_4"></a>
 いずれも1行が1周波数に対応し、周波数の数だけ行を並べる。
 
 **潮汐データ（振幅ファイル *_amp.dat、位相ファイル *_pha.dat）**
@@ -461,8 +544,226 @@ iflag はその成分のデータがあれば 1、なければ 0 である。振
 
 ティッパーはデータと誤差を1つのファイルに書く。generr_tip.sh で作成できる。
 
-## 参考文献
-- Egbert, G. D., & Erofeeva, S. Y. (2002). Efficient inverse modeling of barotropic ocean tides. Journal of Atmospheric and Oceanic technology, 19(2), 183-204.<a id="EE2022"></a>
+## 参考文献 <a id="References"></a>
+- Egbert, G. D., & Erofeeva, S. Y. (2002). Efficient inverse modeling of barotropic ocean tides. Journal of Atmospheric and Oceanic technology, 19(2), 183-204.<a id="EE2002"></a>
 - Minami, T., Utsugi, M., Utada, H., Kagiyama, T., & Inoue, H. (2018). Temporal variation in the resistivity structure of the first Nakadake crater, Aso volcano, Japan, during the magmatic eruptions from November 2014 to May 2015, as inferred by the ACTIVE electromagnetic monitoring system. Earth, Planets and Space, 70(1), 138. <a id="Minami2018"></a>
-- Minami, T., Toh, H., Ichihara, H., & Kawashima, I. (2017). Three‐Dimensional Time Domain Simulation of Tsunami‐Generated Electromagnetic Fields: Application to the 2011 Tohoku Earthquake Tsunami. Journal of Geophysical Research: Solid Earth, 122(12), 9559-9579. <a id="M2017"></a>
+- Minami, T., Toh, H., Ichihara, H., & Kawashima, I. (2017). Three‐Dimensional Time Domain Simulation of Tsunami‐Generated Electromagnetic Fields: Application to the 2011 Tohoku Earthquake Tsunami. Journal of Geophysical Research: Solid Earth, 122(12), 9559-9579. <a id="Minami2017"></a>
+- Oishi, Y., Piggott, M. D., Maeda, T., Kramer, S. C., Collins, G. S., Tsushima, H., & Furumura, T. (2013). Three‐dimensional tsunami propagation simulations using an unstructured mesh finite element model. Journal of Geophysical Research: Solid Earth, 118(6), 2998-3018.<a id="O2013"></a>
 - 本間利久・五十嵐一・川口秀樹 (2002). 数値電磁力学：基礎と応用（日本シミュレーション学会 編）. 森北出版, 251 pp. ISBN 4-627-71641-9（2021年版: ISBN 978-4-627-71649-0）. https://www.morikita.co.jp/books/mid/071641 <a id="Honma2002"></a>
+
+## 付録A 離散化 <a id="Appendix_discretization"></a>
+本付録では、[4章](#Governing_equation)の支配方程式(4.1)を辺要素有限要素法で離散化する方法をまとめる。離散化の導出は ActFEM マニュアル（v1.5、付録A・B）に従う。有限要素法（特に辺要素を用いた電磁場解析）を初めて学ぶ読者には、[本間・五十嵐・川口 (2002)『数値電磁力学：基礎と応用』](#Honma2002) が分かりやすい入門書として薦められる。
+
+### A.1 弱形式 <a id="secA_1"></a>
+ガラーキン法では、試験関数 $\mathbf{w}$（辺要素基底関数）をかけて計算領域 $\Omega$ で積分した
+
+$$\int_{\Omega}\mathbf{w}\cdot\left\{ \nabla\times\nabla\times\mathbf{A} + i\omega\mu\sigma\mathbf{A} - \mu\sigma\left( \mathbf{v}\times\mathbf{F} \right) \right\}dV = 0 \cdot \cdot \cdot (A.1)$$
+
+を解く。第1項を部分積分すると、
+
+$$\int_{\Omega}\mathbf{w}\cdot\left( \nabla\times\nabla\times\mathbf{A} \right)dV = \int_{\partial\Omega}\left( \mathbf{B}\times\mathbf{w} \right)\cdot\mathbf{n}\,dS + \int_{\Omega}\left( \nabla\times\mathbf{w} \right)\cdot\left( \nabla\times\mathbf{A} \right)dV$$
+
+となる。計算領域の外側境界 $\partial\Omega$ では ActFEM と同様に $\mathbf{n}\cdot\left( \mathbf{B}\times\mathbf{w} \right) = \mathbf{w}\cdot\left( \mathbf{n}\times\mathbf{B} \right) = 0$ とおけるため（境界を貫く電流がないことに対応）、境界積分は消える。したがって弱形式は
+
+$$\int_{\Omega}\left( \nabla\times\mathbf{w} \right)\cdot\left( \nabla\times\mathbf{A} \right)dV + i\omega\mu\int_{\Omega}\sigma\,\mathbf{w}\cdot\mathbf{A}\,dV = \mu\int_{\Omega}\sigma\,\mathbf{w}\cdot\left( \mathbf{v}\times\mathbf{F} \right)dV \cdot \cdot \cdot (A.2)$$
+
+となる。境界では $\mathbf{A}$ の接線成分を 0 とする（Dirichlet 条件）。計算領域は十分大きくとる必要がある。
+
+### A.2 辺要素による離散化 <a id="secA_2"></a>
+計算領域を四面体要素に分割し、$e$ 番目の要素 $\Omega_e$ 内のベクトルポテンシャルを、6本の辺に対応する辺要素基底関数 $\mathbf{w}_j$ で
+
+$$\mathbf{A}_e = \sum_{j=1}^{6}\mathbf{w}_j\left\lbrack Al \right\rbrack_j, \qquad \mathbf{w}_j = \mathbf{w}_{kl} = \lambda_k\nabla\lambda_l - \lambda_l\nabla\lambda_k \cdot \cdot \cdot (A.3)$$
+
+と展開する。ここで $\lambda_k$ は節点 $k$ の一次節点基底関数（体積座標）、未知数 $\left\lbrack Al \right\rbrack_j$ は辺 $j$ に沿った $\mathbf{A}$ の線積分である。辺番号 $j$ と節点番号 $(k, l)$、対辺 $(m, n)$ の対応は下図と表A.1の通りであり、ActFEM と同じである。
+
+<img src="./images/edge_numbering.png" width="55%">
+
+表A.1.
+
+| 辺番号 $j$ | $k$ | $l$ | $m$ | $n$ |
+|:----------:|:---:|:---:|:---:|:---:|
+| 1          | 1   | 2   | 3   | 4   |
+| 2          | 2   | 3   | 1   | 4   |
+| 3          | 1   | 3   | 4   | 2   |
+| 4          | 1   | 4   | 2   | 3   |
+| 5          | 2   | 4   | 3   | 1   |
+| 6          | 3   | 4   | 1   | 2   |
+
+式(A.3)を式(A.2)に代入すると、要素ごとの方程式
+
+$$\left\{ \left\lbrack M_e \right\rbrack + i\omega\mu\sigma_e\left\lbrack N_e \right\rbrack \right\}\left\lbrack \mathbf{Al}_e \right\rbrack = \mathbf{s}_e \cdot \cdot \cdot (A.4)$$
+
+が得られる。$\sigma_e$ は要素 $e$ の導電率（要素内一定）である。要素行列は解析的に計算できる。
+
+$$\left\lbrack M_e \right\rbrack_{ij} = \int_{\Omega_e}\left( \nabla\times\mathbf{w}_i \right)\cdot\left( \nabla\times\mathbf{w}_j \right)dV = \frac{1}{9v}\,\mathbf{x}_{mn}\cdot\mathbf{x}_{m'n'} \cdot \cdot \cdot (A.5)$$
+
+$$\left\lbrack N_e \right\rbrack_{ij} = \int_{\Omega_e}\mathbf{w}_i\cdot\mathbf{w}_j\,dV = \nabla\lambda_l\cdot\nabla\lambda_{l'}\int_{\Omega_e}\lambda_k\lambda_{k'}dV - \nabla\lambda_l\cdot\nabla\lambda_{k'}\int_{\Omega_e}\lambda_k\lambda_{l'}dV - \nabla\lambda_k\cdot\nabla\lambda_{l'}\int_{\Omega_e}\lambda_l\lambda_{k'}dV + \nabla\lambda_k\cdot\nabla\lambda_{k'}\int_{\Omega_e}\lambda_l\lambda_{l'}dV \cdot \cdot \cdot (A.6)$$
+
+ここで $(k,l,m,n)$ は辺 $i$、$(k',l',m',n')$ は辺 $j$ に対応する節点番号、$v$ は四面体の体積、$\mathbf{x}_{mn}$ は節点 $m$ から $n$ へのベクトルである。導出には次の関係を用いる。
+
+$$\nabla\times\mathbf{w}_j = 2\nabla\lambda_k\times\nabla\lambda_l = \frac{1}{3v}\mathbf{x}_{mn}, \qquad \int_{\Omega_e}\lambda_k\lambda_l\,dV = \begin{cases} v/20 & (k\neq l) \\ v/10 & (k = l) \end{cases} \cdot \cdot \cdot (A.7)$$
+
+辺の向きは、要素ローカルの辺と全体の辺（line）の向きが逆の場合に符号 $-1$ をかけて揃える。要素行列を全要素について重ね合わせて得られる全体の連立一次方程式（複素対称）を、PARDISO で解く。
+
+各要素の導電率 $\sigma_e$ は物理グループで決まる。
+
+| 物理グループ | 領域 | $\sigma_e$ |
+|:----:|:----|:----|
+| 1 | 空気 | 制御ファイルで与える $\sigma_\mathrm{air}$ |
+| 2 | 海洋 | 3.33 S/m（ソース内で固定） |
+| 3 以上 | 陸・海底下 | 制御ファイルの値、または比抵抗ファイル（cond.msh）の値 |
+
+### A.3 潮汐起電力項（右辺ベクトル） <a id="secA_3"></a>
+右辺ベクトルの要素寄与は
+
+$$s_i^e = \mu\sigma_e\int_{\Omega_e}\mathbf{w}_i\cdot\left( \mathbf{v}\times\mathbf{F} \right)dV \cdot \cdot \cdot (A.8)$$
+
+である。ActFEM では送信源が線電流（ヘヴィサイド関数）であったため、この積分は送信ケーブルが貫く要素だけで評価していた。ActFEMtide では起電力が海洋全体に分布するため、海洋要素すべてで評価する。各節点 $p$ における流速 $\mathbf{v}_p$ と背景磁場 $\mathbf{F}_p$ から節点値 $\left( \mathbf{v}\times\mathbf{F} \right)_p = \mathbf{v}_p\times\mathbf{F}_p$ を計算し、要素内では節点基底関数で一次補間する。
+
+$$\left( \mathbf{v}\times\mathbf{F} \right)(\mathbf{r}) \simeq \sum_{p=1}^{4}\lambda_p(\mathbf{r})\left( \mathbf{v}\times\mathbf{F} \right)_p \cdot \cdot \cdot (A.9)$$
+
+式(A.9)と $\mathbf{w}_i = \lambda_k\nabla\lambda_l - \lambda_l\nabla\lambda_k$ を式(A.8)に代入すると、$\nabla\lambda$ が要素内で一定であることから
+
+$$s_i^e = \mu\sigma_e\sum_{p=1}^{4}\left\{ \left( \int_{\Omega_e}\lambda_k\lambda_p\,dV \right)\nabla\lambda_l\cdot\left( \mathbf{v}\times\mathbf{F} \right)_p - \left( \int_{\Omega_e}\lambda_l\lambda_p\,dV \right)\nabla\lambda_k\cdot\left( \mathbf{v}\times\mathbf{F} \right)_p \right\} \cdot \cdot \cdot (A.10)$$
+
+となり、式(A.7)の積分公式を用いて解析的に計算できる。$\mathbf{v}$ が複素数のため、$s_i^e$ も複素数となる。海洋以外の要素では $s_i^e = 0$ である。
+
+### A.4 スケーリングと単位 <a id="secA_4"></a>
+ActFEM と同様に、スケーリング長 $L = 1000$ m を用いて座標を km 単位で扱う（ActFEM マニュアル付録B）。$\nabla = \nabla'/L$、$\mathbf{w} = \mathbf{w}'/L$、$dV = L^3dV'$ と置き換えると、式(A.4)は
+
+$$\sum_{j=1}^{6}\left\{ \left\lbrack M_e' \right\rbrack_{ij} + L^2 i\omega\mu\sigma_e\left\lbrack N_e' \right\rbrack_{ij} \right\}\left\lbrack Al' \right\rbrack_j = \mu\sigma_e L^2\int_{\Omega_e}\mathbf{w}_i'\cdot\left( \mathbf{v}\times\mathbf{F} \right)dV' \cdot \cdot \cdot (A.11)$$
+
+となる。ここで $'$ は km 単位の座標で構成した量を表す。
+
+入力の単位は流速 $\mathbf{v}$ [m/s]、背景磁場 $\mathbf{F}$ [nT] であり、$\mathbf{v}\times\mathbf{F}$ は [nV/m] で与えられる。一方、ActFEMtide は電場を [mV/km]（= [μV/m]）で出力する。このためコード（src/solver_mpi/forward_bxyz_mpi.f90 の GENMAT）では、式(A.11)の右辺に次の係数をかけている。
+
+$$L^2 \times 10^{6} \times 10^{-9} = 10^{6}\,[\mathrm{m^2/km^2}] \times 10^{6}\,[(\mathrm{mV/km})/(\mathrm{V/m})] \times 10^{-9}\,[(\mathrm{V/m})/(\mathrm{nV/m})] = 10^{3}$$
+
+### A.5 電場・磁場・電流の計算 <a id="secA_5"></a>
+連立方程式を解いて $\left\lbrack Al \right\rbrack$ が求まった後、観測点を含む要素内で式(A.3)により $\mathbf{A}$ を補間し、電場を $\mathbf{E} = i\omega\mathbf{A}$、磁場を $\mathbf{B} = \nabla\times\mathbf{A}$ から求める。
+
+海洋中の電流には、誘導電場 $\mathbf{E}$ による寄与と起電力 $\mathbf{v}\times\mathbf{F}$ による寄与の両方が含まれる（[4章](#Governing_equation)のオームの法則）。plot_ixyh.sh で描く水平電流（深さ積分）は、水深 $h$ を用いて
+
+$$\mathbf{I}_h = \sigma h\left( \mathbf{E}_h + \left( \mathbf{v}\times\mathbf{F} \right)_h \right)$$
+
+として計算し、$\sigma h\mathbf{E}_h$ と $\sigma h(\mathbf{v}\times\mathbf{F})_h$ の各成分も出力する（src/solver_mpi/n_ebfem_bxyz_mpi.f90）。
+
+## 付録B メッシュ生成 <a id="Appendix_mesh"></a>
+ActFEMtide のメッシュ生成部は __TMTGEM__ [(Minami et al. 2017)](#Minami2017) と共通であり（ソースは tmtgem/mesh/）、本付録は TMTGEM マニュアル（v1.2、5.1節）の内容を訳出したものである。図B.1〜B.5 は TMTGEM の東北沖のサンプル（Tohoku/mesh/）の例である。
+
+### B.1 メッシュ生成の流れ <a id="secB_1"></a>
+TMTGEM（および ActFEMtide）で最も重要かつ難しいのは、潮汐（津波）起源電磁場のシミュレーションに適した四面体メッシュを生成することである。メッシュ生成の大まかな流れは次の通りであり、すべてメッシュ生成フォルダ（例: Kikai/mesh/）内の tetmeshgen.sh で実行される。
+
+1. 二次元三角形メッシュを生成する
+2. 海底地形データを読み込み、三角形メッシュに反映する
+3. 地表（海面）の三角形を海底まで押し出し（extrude）、海洋の三次元メッシュ（mesh1）を生成する
+4. 空気と固体地球の三次元四面体メッシュ（mesh2）を生成する
+5. mesh1 と mesh2 を結合し、三次元電磁場シミュレーション用のメッシュを作る
+
+流れの理解には Minami et al. (2017) の Fig. 1 を参照されたい。Kikai/mesh/tetmeshgen.sh の各段階との対応は次の通りである。順計算（[5章](#Forward_tutorial)）とインバージョン（[6章](#Inversion_tutorial)）は、どちらもこのスクリプトで作った Kikai/mesh/ のメッシュを使う。三次元メッシュの外枠（pre3d.geo の8頂点）の x, y は、二次元メッシュ polygonki.msh の水平方向の範囲に合わせている。二次元メッシュの外縁は、coastline.exe が計算範囲（focus area + lenout）を地形データの格子線まで外側に丸めて決めるため、mesh.ctl から計算した範囲より少し広い（Kikai では x 方向に約 0.6 km、y 方向に約 1.3 km）。以前は外枠に mesh.ctl から計算した範囲をそのまま使っていたため、em3d.msh の側面が z = 0 で折れ曲がり、平面になっていなかった（2026年11月26日に修正）。gmsh には `-setnumber General.RandomSeed 12345`（同じメッシュを再現するための乱数の種の固定）と `-format msh2` も与えている。
+
+| tetmeshgen.sh | 実行するプログラム | 内容 |
+|:--:|:--|:--|
+| [1] | coastline.exe | 海岸線を抽出し、二次元メッシュ用の polygonki.geo と二次元背景メッシュ bgmesh.pos を作る |
+| [2] | gmsh polygonki.geo -2 -bgm bgmesh.pos | bgmesh.pos のメッシュサイズに従って二次元三角形メッシュ polygonki.msh を生成する（生成後に bgmesh.pos は削除される） |
+| [3] | mshki2ocean.exe | 二次元メッシュから海洋部分を取り出す |
+| [4] | extrude.exe | 海洋の三次元メッシュ ocean.msh を生成する |
+| [5] | mk3dgeo.exe, gmsh pre3d.geo -3 -bgm bgmesh3d.pos | mk3dgeo.exe が pre3d.geo と三次元背景メッシュ bgmesh3d.pos を作り、gmsh が bgmesh3d.pos のメッシュサイズに従って空気と固体地球の三次元メッシュ pre3d.msh を生成する |
+| [6] | combine3d.exe | ocean.msh と pre3d.msh を結合し em3d.msh を作る |
+| [7] | mkline.exe | em3d.msh の辺（line）の情報 lineinfo.dat を作る |
+
+**tetmeshgen.sh が出力する主なファイル**（いずれも gmsh で表示できる）
+
+| ファイル | 内容 |
+|:--|:--|
+| *.geo | ジオメトリファイル |
+| polygonki.msh | 地表・海面の二次元三角形メッシュ |
+| ocean.msh | 海洋層のみの三次元四面体メッシュ |
+| pre3d.msh | 空気と固体地球のみの三次元四面体メッシュ |
+| em3d.msh | シミュレーションに用いる最終的な三次元四面体メッシュ |
+| lineinfo.dat | em3d.msh の辺（line）のデータ |
+
+![FigB1](./images/mesh_Fig17.png)
+図B.1. tetmeshgen.sh の出力例（TMTGEM の Tohoku サンプル）。
+
+### B.2 制御ファイル（mesh.ctl） <a id="secB_2"></a>
+メッシュ生成の制御パラメータはすべて制御ファイル（例: Kikai/mesh/mesh.ctl）にまとめられている。以下は TMTGEM の Tohoku/mesh/mesh.ctl に説明を付けたものである。括弧内は説明であり、実際のファイルには書かない。
+
+    # of header        |3
+    ## This control file is generated on Sep 7, 2016, (see m_param_mesh.f90)
+    ## It is confirmed that this control file works well
+    --------10--------20--------------------------------
+    topofile           |../topo/topo.xyz (入力する地形ファイル)
+    west bound  [deg]  | 140.0           (図B.2 参照)
+    east bound  [deg]  | 148.0           (図B.2 参照)
+    south bound [deg]  | 34.0            (図B.2 参照)
+    north bound [deg]  | 42.0            (図B.2 参照)
+    nmcal lower bnd[km]| -500.0          (図B.4 参照)
+    nmcal upper bnd[km]| 1000.0          (図B.4 参照)
+    sizein  [km]       |20.0             (図B.2 参照)
+    sizeout [km]       |100.0            (図B.2 参照)
+    sizecoastratio [km]|0.3              (図B.3 参照)
+    lenout  [km]       |300.0            (図B.2 参照)
+    # of observatories |2                (細かいメッシュが必要な観測点の数)
+    name of obs        |ESA              (観測点名)
+    lon,lat[deg]alt[km]|141.35472       39.236944      0.0         (*)
+    name of obs        |b14
+    lon,lat[deg]alt[km]|144.807595      39.0582       -5.380       (書式 g15.7)
+    reso at obs [km]   |1.0              (図B.2 参照)
+    sigma forGauss [km]|50.0             (図B.2 参照)
+    0:none,1:vres<hres |0                (とにかく 0 にする)
+    # of max layers    |3                (図B.5 参照)
+    nlayer=1 up to [km]|-0.3             (図B.5 参照)
+    nlayer=2 up to [km]|-2.0             (図B.5 参照)
+    header             |polygon          (変更してもよいが "polygon" が安全)
+    bgmesh: upzin  [km]|20.0
+    bgmesh: downzin[km]|-20.0
+    bgmesh:sizein3d[km]|14.0
+    (最後の3行は三次元背景メッシュ bgmesh3d.pos のパラメータ、B.3 節参照)
+
+\*: 高度（alt）は二次元メッシュには使われない。三次元背景メッシュ（bgmesh3d.pos）では観測点の z 座標として使われる。ソース（tmtgem/common/m_param_mesh.f90 の calobsxyz）では、ラベルの [km] と異なり、値を [m] とみなして 10⁻³ 倍して km に換算している。
+
+Kikai/mesh/mesh.ctl も同じ形式であり、14 個の観測点（P5〜P18）を指定し、海洋の層数を最大 4（nlayer=1〜3 の境界を -0.3, -0.6, -6.0 km）としている。なお、TMTGEM マニュアル（v1.2）では三次元背景メッシュ bgmesh3d.pos は未使用とされているが、ActFEMtide の Kikai/mesh/tetmeshgen.sh では二次元・三次元の両方で背景メッシュを使っている（B.1 節の表の [2] と [5]）。
+
+### B.3 パラメータの意味 <a id="secB_3"></a>
+**二次元三角形メッシュの制御**
+
+- west/east/south/north bound: 細かいメッシュを作る領域（focus area）の経度・緯度の範囲 [deg]
+- sizein: 内側の領域（focus area）における三角形メッシュの水平分解能 [km]
+- sizeout: 水平方向の計算境界における三角形メッシュの水平分解能 [km]
+- lenout: focus area の外側に付け加える領域の幅 [km]
+- reso at obs, sigma forGauss: 観測点の周囲では、メッシュサイズが観測点で reso at obs となり、sizein に向かってガウス関数（幅 sigma forGauss）で大きくなる
+
+![FigB2](./images/mesh_Fig18.png)
+図B.2. メッシュ生成パラメータの意味（polygonki.msh）。
+
+**海岸線に沿ったメッシュサイズの制御（sizecoastratio）**
+
+海岸線上のメッシュサイズは、内側の領域では sizecoastratio × sizein、外側では sizecoastratio × sizeout となる。
+
+![FigB3](./images/mesh_Fig19.png)
+図B.3. 海岸線に沿った分解能を決めるパラメータの意味（polygonki.msh）。
+
+**em3d.msh の上端と下端の設定（nmcal upper bnd, nmcal lower bnd）**
+
+計算領域の上端（空気側、正）と下端（固体地球側、負）の z 座標 [km] を与える。海面が z = 0 である。
+
+![FigB4](./images/mesh_Fig20.png)
+図B.4. 三次元メッシュの構造（pre3d.geo）。
+
+**水深に応じた海洋の層数の制御（# of max layers, nlayer=* up to [km]）**
+
+海洋の層数を最大 "# of max layers" とし、海底の z 座標に応じて層数を変える。図B.5 の例（最大 3 層）では、海底の z が -0.3 km より浅いところは 1 層、-0.3〜-2.0 km は 2 層、-2.0 km より深いところは 3 層となる。
+
+![FigB5](./images/mesh_Fig21.png)
+図B.5. 海洋の層数を制御するパラメータ（em3d.msh の鉛直断面）。
+
+**三次元背景メッシュの制御（bgmesh: upzin, downzin, sizein3d）**
+
+Kikai/mesh/tetmeshgen.sh では、空気と固体地球の三次元メッシュを `gmsh pre3d.geo -3 -bgm bgmesh3d.pos` で生成する。bgmesh3d.pos は mk3dgeo.exe が mesh.ctl から作る背景メッシュであり（tmtgem/mesh/outbgmesh3d.f90、m_horizontalresolution.f90）、各点の目標メッシュサイズを次のように与える。
+
+- focus area（west/east/south/north bound の範囲）かつ downzin ≤ z ≤ upzin [km] の直方体の内側: sizein3d [km]
+- そのうち観測点から 3 × sigma forGauss 以内: 観測点で reso at obs となり、sizein3d に向かってガウス関数（幅 sigma forGauss）で大きくなる値（二次元メッシュと同じ形）
+- 直方体の外側: sizeout [km]
+
+背景メッシュの格子は、計算領域の境界、z = upzin, downzin の面、観測点の周りに置かれる。Kikai/mesh/mesh.ctl では upzin = 20 km、downzin = -60 km、sizein3d = 20 km としている。
