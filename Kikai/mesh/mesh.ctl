@@ -7,12 +7,12 @@ west bound  [deg]  | 128.0
 east bound  [deg]  | 132.0
 south bound [deg]  | 29.0
 north bound [deg]  | 32.0
-nmcal lower bnd[km]|-500.0
-nmcal upper bnd[km]|500.0
+nmcal lower bnd[km]|-2000.0
+nmcal upper bnd[km]|4000.0
 sizein  [km]       |50.0
-sizeout [km]       |100.0
+sizeout [km]       |500.0
 sizecoastratio [km]|0.40
-lenout  [km]       |500.0
+lenout  [km]       |3000.0
 # of observatories |14
 name of obs        |P5
 lon,lat[deg]alt[km]|130.3583        30.6500       -0.383
