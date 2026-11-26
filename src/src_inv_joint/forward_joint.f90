@@ -47,6 +47,7 @@ logical,    allocatable,dimension(:,:)  :: line_bc_mt     ! 2021.12.29
 complex(8), allocatable,dimension(:,:)  :: rf,rf_mt       ! 2021.12.29 rhs vectors
 integer(4)                              :: i,j,k,IB
 real(8)                                 :: zmin,zmax,xout,yout
+real(8)                                 :: xyzminmax_bc(6) ! 2026.11.26 CC
 type(watch)                             :: t_watch ! 2017.12.22
 call watchstart(t_watch) !2017.12.22
 
@@ -58,10 +59,9 @@ allocate(Avalue_bc_mt(nline,2),line_bc_mt(nline,2) ) ! 2021.12.29
 allocate(rf(    nline,nsr) )
 allocate(rf_mt( nline,2  ) )  ! 2021.12.29
 ut = null ! initialize (2017.05.16)
-zmin = g_param%zbound(1)
-zmax = g_param%zbound(4)
-xout = g_param%xbound(4)
-yout = g_param%ybound(4)
+! Dirichlet boundaries are now set at the outer boundaries of the 3-D mesh (g_param%xyzminmax),
+! not at zbound/xbound/ybound from the control file 2026.11.26 CC
+xyzminmax_bc = g_param%xyzminmax ! xmin,xmax,ymin,ymax,zmin,zmax [km] of em3d.msh 2026.11.26 CC
 iflag_comp = g_param_joint%iflag_comp ! 2018.10.05
 
 !#[4]## Initialize the matrices and vectors
@@ -75,7 +75,7 @@ CALL COPY_UL_ICCG12(A,ip) ! 2021.10.04
 
 !#[5]## Generate Boundary Values
 !#[5-1]## Dirichlet boundary at calculation boundaries
-if (ACT) CALL GENBCCSEM(zmin,zmax,xout,yout,l_line,h_mesh,Avalue_bc,line_bc,IB) ! set line_bc, Avalue_bc
+if (ACT) CALL GENBCCSEM(xyzminmax_bc,l_line,h_mesh,Avalue_bc,line_bc,IB) ! set line_bc, Avalue_bc
 if (MT ) CALL GENBCMT(g_surface,omega,nline,Avalue_bc_mt,line_bc_mt) ! ok 2021.12.29
 if ( ip .eq. 0 .and. MT  .and. .false. ) then ! for debug 2026.03.11
   open(1,file="bc.dat")
@@ -739,11 +739,11 @@ end
 !########################################  GENBCCSEM
 ! Coded on October 19, 2015
 ! THis subroutine set the boundary condition for calculation boundaries
-subroutine  GENBCCSEM(zmin,zmax,xout,yout,l_line,h_mesh,Avalue_bc,line_bc,IB)
+subroutine  GENBCCSEM(xyzminmax,l_line,h_mesh,Avalue_bc,line_bc,IB) ! xyzminmax 2026.11.26 CC
 use mesh_type
 use line_type
 implicit none
-real(8),        intent(in)  :: zmin,zmax,xout,yout ! These parameters are from meshpara.f90
+real(8),        intent(in)  :: xyzminmax(6) ! xmin,xmax,ymin,ymax,zmin,zmax of 3-D mesh [km] 2026.11.26 CC
 type(mesh),     intent(in)  :: h_mesh
 type(line_info),intent(in)  :: l_line
 logical(4),     intent(out) :: line_bc(  l_line%nline)  ! if .true., the dirichlet bound set
@@ -751,13 +751,16 @@ complex(8),     intent(out) :: Avalue_bc(l_line%nline) ! Dirichlet boundary valu
 !#--------------- internal variables -------------
 integer(4),allocatable,dimension(:) :: line_group! 1:top,2:north,3:west,4:south, 5:east, 6:bottom
 integer(4) :: i, j, ncount, n1, n2
-real(8) :: x1, y1, z1, x2, y2, z2, xout1, yout1, zmin1, zmax1
+real(8) :: x1, y1, z1, x2, y2, z2, xmin1, xmax1, ymin1, ymax1, zmin1, zmax1 ! 2026.11.26 CC
+real(8),parameter :: tol=0.01d0 ! [km] tolerance for boundary detection, same as EXTRACT6SURFACES for MT 2026.11.26 CC
 !# For direct solvers
 integer(4),intent(out) :: IB ! # of boundary lines
 allocate(line_group(l_line%nline))
 
 !#[0]## set boudary coordinates
-xout1=xout-1.d0; yout1=yout-1.d0; zmin1=zmin+1.d0;  zmax1=zmax-1.d0
+xmin1=xyzminmax(1)+tol; xmax1=xyzminmax(2)-tol ! 2026.11.26 CC
+ymin1=xyzminmax(3)+tol; ymax1=xyzminmax(4)-tol ! 2026.11.26 CC
+zmin1=xyzminmax(5)+tol; zmax1=xyzminmax(6)-tol ! 2026.11.26 CC
 
 !#[1]## Initialize Avalue_bc and line_bc
 line_bc(:)=.false.
@@ -770,13 +773,13 @@ do i=1,l_line%nline
      n1=l_line%line(1,i) ; n2=l_line%line(2,i)
      x1=h_mesh%xyz(1,n1) ; y1=h_mesh%xyz(2,n1) ; z1=h_mesh%xyz(3,n1)
      x2=h_mesh%xyz(1,n2) ; y2=h_mesh%xyz(2,n2) ; z2=h_mesh%xyz(3,n2)
-     if         ( x1 .le. -xout1 .and.  x2 .le. -xout1) then
+     if         ( x1 .le. xmin1 .and.  x2 .le. xmin1) then
         line_group(i)=3
-     else if  (x1 .ge. xout1 .and.  x2 .ge. xout1 ) then
+     else if  (x1 .ge. xmax1 .and.  x2 .ge. xmax1 ) then
         line_group(i)=5
-     else if  ( y1 .le. -yout1 .and. y2 .le. -yout1 )  then
+     else if  ( y1 .le. ymin1 .and. y2 .le. ymin1 )  then
         line_group(i)=4
-     else if  ( y1 .ge. yout1 .and. y2 .ge. yout1 ) then
+     else if  ( y1 .ge. ymax1 .and. y2 .ge. ymax1 ) then
         line_group(i)=2
      else if  ( z1 .le. zmin1 .and. z2 .le. zmin1 )  then
         line_group(i)=6

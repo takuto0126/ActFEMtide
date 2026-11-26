@@ -26,15 +26,15 @@ logical,   allocatable,dimension(:)  :: line_bc
 complex(8),allocatable,dimension(:,:):: b_vec    ! 2017.07.11
 integer(4)                           :: i,j,k
 real(8)                              :: omega,zmin,zmax,xout,yout
+real(8)                              :: xyzminmax_bc(6) ! 2026.11.26 CC
 
 !#[1]## set
 write(*,*) "nsr=",nsr,"ip",ip
 allocate(Avalue_bc(doftot),line_bc(doftot))
 allocate(b_vec(doftot,nsr)) ! 2017.07.11
-zmin = g_param%zbound(1)
-zmax = g_param%zbound(4)
-xout = g_param%xbound(4)
-yout = g_param%ybound(4)
+! Dirichlet boundaries are now set at the outer boundaries of the 3-D mesh (g_param%xyzminmax),
+! not at zbound/xbound/ybound from the control file 2026.11.26 CC
+xyzminmax_bc = g_param%xyzminmax ! xmin,xmax,ymin,ymax,zmin,zmax [km] of em3d.msh 2026.11.26 CC
 
 !#[3]## SET Coefficient matrix and Generate Matrix
 
@@ -52,7 +52,7 @@ CALL GENMAT(h_mesh,l_line,A,b_vec,omega,sparam,g_param,g_cond) ! 2017.07.11
 CALL COPY_UL_ICCG12(A,ip)
 
 !#[5]## Dirichlet boundary at calculation boundaries
-CALL GENBCCSEM(zmin,zmax,xout,yout,l_line,h_mesh,Avalue_bc,line_bc)
+CALL GENBCCSEM(xyzminmax_bc,l_line,h_mesh,Avalue_bc,line_bc)
 
 !#[6]## Set Boundary Condition for dirichlet boundary
 CALL SET_BC_ICCG(A, doftot, nsr, b_vec, Avalue_bc, line_bc, ip) !2017.07.11
@@ -464,23 +464,26 @@ end
 !########################################  GENBCCSEM
 ! Coded on October 19, 2015
 ! THis subroutine set the boundary condition for calculation boundaries
-subroutine  GENBCCSEM(zmin,zmax,xout,yout,l_line,h_mesh,Avalue_bc,line_bc)
+subroutine  GENBCCSEM(xyzminmax,l_line,h_mesh,Avalue_bc,line_bc) ! xyzminmax 2026.11.26 CC
 use mesh_type
 use line_type
 implicit none
-real(8),   intent(in)  :: zmin,zmax,xout,yout ! These parameters are from meshpara.f90
+real(8),   intent(in)  :: xyzminmax(6) ! xmin,xmax,ymin,ymax,zmin,zmax of 3-D mesh [km] 2026.11.26 CC
 type(mesh),     intent(in) :: h_mesh
 type(line_info),intent(in) :: l_line
 logical(4),intent(out) :: line_bc(l_line%nline)  ! if .true., the dirichlet bound set
 complex(8),intent(out) :: Avalue_bc(l_line%nline) ! Dirichlet boundary value
 integer(4),allocatable,dimension(:) :: line_group! 1:top,2:north,3:west,4:south, 5:east, 6:bottom
 integer(4) :: i, j, ncount, n1, n2
-real(8) :: x1, y1, z1, x2, y2, z2, xout1, yout1, zmin1, zmax1
+real(8) :: x1, y1, z1, x2, y2, z2, xmin1, xmax1, ymin1, ymax1, zmin1, zmax1 ! 2026.11.26 CC
+real(8),parameter :: tol=0.01d0 ! [km] tolerance for boundary detection, same as EXTRACT6SURFACES for MT 2026.11.26 CC
 !# For direct solvers
 allocate(line_group(l_line%nline))
 
 !#[0]## set boudary coordinates
-xout1=xout-1.d0; yout1=yout-1.d0; zmin1=zmin+1.d0;  zmax1=zmax-1.d0
+xmin1=xyzminmax(1)+tol; xmax1=xyzminmax(2)-tol ! 2026.11.26 CC
+ymin1=xyzminmax(3)+tol; ymax1=xyzminmax(4)-tol ! 2026.11.26 CC
+zmin1=xyzminmax(5)+tol; zmax1=xyzminmax(6)-tol ! 2026.11.26 CC
 
 !#[1]## Initialize Avalue_bc and line_bc
 line_bc(:)=.false.
@@ -492,13 +495,13 @@ do i=1,l_line%nline
      n1=l_line%line(1,i) ; n2=l_line%line(2,i)
      x1=h_mesh%xyz(1,n1) ; y1=h_mesh%xyz(2,n1) ; z1=h_mesh%xyz(3,n1)
      x2=h_mesh%xyz(1,n2) ; y2=h_mesh%xyz(2,n2) ; z2=h_mesh%xyz(3,n2)
-     if         ( x1 .le. -xout1 .and.  x2 .le. -xout1) then
+     if         ( x1 .le. xmin1 .and.  x2 .le. xmin1) then
         line_group(i)=3
-     else if  (x1 .ge. xout1 .and.  x2 .ge. xout1 ) then
+     else if  (x1 .ge. xmax1 .and.  x2 .ge. xmax1 ) then
         line_group(i)=5
-     else if  ( y1 .le. -yout1 .and. y2 .le. -yout1 )  then
+     else if  ( y1 .le. ymin1 .and. y2 .le. ymin1 )  then
         line_group(i)=4
-     else if  ( y1 .ge. yout1 .and. y2 .ge. yout1 ) then
+     else if  ( y1 .ge. ymax1 .and. y2 .ge. ymax1 ) then
         line_group(i)=2
      else if  ( z1 .le. zmin1 .and. z2 .le. zmin1 )  then
         line_group(i)=6
