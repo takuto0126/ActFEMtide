@@ -698,10 +698,20 @@ real(8)    :: zmax,zmin,x01,x02,y01,y02
 !#[1]## set input
 zmin = g_meshpara%zmin
 zmax = g_meshpara%zmax
-x01  = g_meshpara%xbound(1)
-x02  = g_meshpara%xbound(4)
-y01  = g_meshpara%ybound(1)
-y02  = g_meshpara%ybound(4)
+!x01  = g_meshpara%xbound(1) ! commented out 2026.11.26 CC
+!x02  = g_meshpara%xbound(4) ! commented out 2026.11.26 CC
+!y01  = g_meshpara%ybound(1) ! commented out 2026.11.26 CC
+!y02  = g_meshpara%ybound(4) ! commented out 2026.11.26 CC
+! 2026.11.26 CC The corners of the 3-D box are set to the horizontal extent of the 2-D surface mesh.
+! The 2-D surface is bounded by topo grid lines just outside xbound/ybound (see TRUNCATEGRD3
+! in m_topo_tool.f90), so using xbound/ybound made the side faces of em3d.msh non-planar.
+x01  = minval(xyz(1,1:n3d)) ! 2026.11.26 CC
+x02  = maxval(xyz(1,1:n3d)) ! 2026.11.26 CC
+y01  = minval(xyz(2,1:n3d)) ! 2026.11.26 CC
+y02  = maxval(xyz(2,1:n3d)) ! 2026.11.26 CC
+write(*,'(a,4f15.7)') " box corners x01,x02,y01,y02 [km] =",x01,x02,y01,y02 ! 2026.11.26 CC
+write(*,'(a,4f15.7)') " (xbound(1),xbound(4),ybound(1),ybound(4) =",g_meshpara%xbound(1),&
+ & g_meshpara%xbound(4),g_meshpara%ybound(1),g_meshpara%ybound(4)                  ! 2026.11.26 CC
 
 !! x3d, y3d, and z3d
 xyz3d(1:3,1:n3d)=xyz(1:3,1:n3d) ! x,y,z are set in subroutine mknode4
