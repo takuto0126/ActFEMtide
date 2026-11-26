@@ -120,7 +120,7 @@ DATA フォルダ内に、以下のファイルが準備されていることを
 図2. M2潮汐による磁場・電場の実部および虚部。この図は plot_ixyh.sh により生成される。
 
 ## 5 支配方程式と離散化 <a id="Governing_equation_and_discretization"></a>
-ActFEMtide のソルバーは __ActFEM__ [(Minami et al. 2018)](#Minami2018) と同じく、ベクトルポテンシャル $\mathbf{A}$ に関する誘導方程式を、四面体メッシュ上の辺要素（Nédélec 一次要素）有限要素法で周波数領域において解く。ActFEM との違いは右辺の励起源のみであり、ActFEM の送信源電流 $\mathbf{i}_s$ の代わりに、海水の運動により生じる起電力 $\sigma\,\mathbf{v}\times\mathbf{F}$ を与える。以下、離散化の導出は ActFEM マニュアル（v1.5、付録A・B）に従う。
+ActFEMtide のソルバーは __ActFEM__ [(Minami et al. 2018)](#Minami2018) と同じく、ベクトルポテンシャル $\mathbf{A}$ に関する誘導方程式を、四面体メッシュ上の辺要素（Nédélec 一次要素）有限要素法で周波数領域において解く。ActFEM との違いは右辺の励起源のみであり、ActFEM の送信源電流 $\mathbf{i}_s$ の代わりに、海水の運動により生じる起電力 $\sigma\,\mathbf{v}\times\mathbf{F}$ を与える。以下、離散化の導出は ActFEM マニュアル（v1.5、付録A・B）に従う。有限要素法（特に辺要素を用いた電磁場解析）を初めて学ぶ読者には、[本間・五十嵐・川口 (2002)『数値電磁力学：基礎と応用』](#Honma2002) が分かりやすい入門書として薦められる。
 
 ### 5.1 支配方程式 <a id="sec5_1"></a>
 導電率 $\sigma$ の海水が、背景磁場（地球主磁場）$\mathbf{F}$ の中を速度 $\mathbf{v}$ で運動するとき、オームの法則は
@@ -235,3 +235,4 @@ $$\mathbf{I}_h = \sigma h\left( \mathbf{E}_h + \left( \mathbf{v}\times\mathbf{F}
 - Egbert, G. D., & Erofeeva, S. Y. (2002). Efficient inverse modeling of barotropic ocean tides. Journal of Atmospheric and Oceanic technology, 19(2), 183-204.<a id="EE2022"></a>
 - Minami, T., Utsugi, M., Utada, H., Kagiyama, T., & Inoue, H. (2018). Temporal variation in the resistivity structure of the first Nakadake crater, Aso volcano, Japan, during the magmatic eruptions from November 2014 to May 2015, as inferred by the ACTIVE electromagnetic monitoring system. Earth, Planets and Space, 70(1), 138. <a id="Minami2018"></a>
 - Minami, T., Toh, H., Ichihara, H., & Kawashima, I. (2017). Three‐Dimensional Time Domain Simulation of Tsunami‐Generated Electromagnetic Fields: Application to the 2011 Tohoku Earthquake Tsunami. Journal of Geophysical Research: Solid Earth, 122(12), 9559-9579. <a id="M2017"></a>
+- 本間利久・五十嵐一・川口秀樹 (2002). 数値電磁力学：基礎と応用（日本シミュレーション学会 編）. 森北出版, 251 pp. ISBN 4-627-71641-9（2021年版: ISBN 978-4-627-71649-0）. https://www.morikita.co.jp/books/mid/071641 <a id="Honma2002"></a>

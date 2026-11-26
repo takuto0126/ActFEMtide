@@ -51,7 +51,7 @@ Note that there are many copied contents from __TMTGEM__ manual (v1.3).
 ## 2 Important notes <a id="ImportantNotes"></a>
 Coordinate system: X: eastward, Y: northward, Z: upward
 
-__Solved equations:__ Refer to [Minami et al. (2018, EPS)](#Minami2018) (with modification to $\mathbf{v}\times \mathbf{F}$ source)
+__Solved equations:__ Refer to [Minami et al. (2018, EPS)](#Minami2018) (with modification to $\mathbf{v}\times \mathbf{F}$ source). For readers new to the finite element method (especially edge-element FEM for electromagnetics), [Honma, Igarashi & Kawaguchi (2002)](#Honma2002) (in Japanese) is recommended as an accessible introduction.
 
 __Input topography data:__ lon [deg], lat [deg], alt [m, __Downward Positive__]
 
@@ -148,4 +148,5 @@ Figure 2. Real and Imaginary values of magnetic and electric fields due to M2 ti
 - Egbert, G. D., & Erofeeva, S. Y. (2002). Efficient inverse modeling of barotropic ocean tides. Journal of Atmospheric and Oceanic technology, 19(2), 183-204.<a id="EE2022"></a>
 - Minami, T., Utsugi, M., Utada, H., Kagiyama, T., & Inoue, H. (2018). Temporal variation in the resistivity structure of the first Nakadake crater, Aso volcano, Japan, during the magmatic eruptions from November 2014 to May 2015, as inferred by the ACTIVE electromagnetic monitoring system. Earth, Planets and Space, 70(1), 138. <a id="Minami2018"></a>
 - Minami, T., Toh, H., Ichihara, H., & Kawashima, I. (2017). Three‐Dimensional Time Domain Simulation of Tsunami‐Generated Electromagnetic Fields: Application to the 2011 Tohoku Earthquake Tsunami. Journal of Geophysical Research: Solid Earth, 122(12), 9559-9579. <a id="M2017"></a>
+- Honma, T., Igarashi, H., & Kawaguchi, H. (2002). Suuchi Denjirikigaku: Kiso to Ouyou [Numerical Electromagnetics: Fundamentals and Applications] (Japan Society for Simulation Technology, Ed.). Morikita Publishing, 251 pp. (in Japanese). ISBN 4-627-71641-9 (2021 edition: ISBN 978-4-627-71649-0). https://www.morikita.co.jp/books/mid/071641 <a id="Honma2002"></a>
 
