@@ -274,90 +274,97 @@ view_slice.sh の冒頭にある z_elevation, y_slice, x_slice などで、断�
 - 座標は X: 東向き、Y: 北向き、Z: 上向き（[2章](#ImportantNotes)）。x, y は原点（lonlatorigin）からの距離 [km] である。
 
 ### 7.2 項目一覧 <a id="sec7_2"></a>
+表の「順計算」「インバージョン」の列は、その項目の値が順計算（ebfem_bxyz_mpi.exe）とインバージョン（ebfem_inv_joint.exe）の計算で使われるかどうかを示す。**未使用**の項目も、読み込みの順番を保つために行を消してはいけない。Kikai の tide_fwd.ctl では、未使用の行の直前に "## [UNUSED]" のコメントを付けている（inv_joint/ と inv_mt/ の tide_fwd.ctl は fwd_tide/tide_fwd.ctl へのシンボリックリンク）。
+
 **A. 地形・メッシュ・入出力ファイル**
 
-| 項目（ラベル） | 説明 |
-|:--|:--|
-| itopofile 0 or 1 | 1: 地形ファイルを与える（次の行から地形ファイルの指定）、0: 地形ファイルを与えない（次の3行は書かない）。 |
-| # of topofile | 地形ファイルの数。ファイルごとに次の2行を繰り返す。 |
-| topofile | 地形ファイルのパス。 |
-| lon lat shift | 地形ファイルの経度・緯度のずらし量 [deg]。 |
-| mesh file | 三次元四面体メッシュ（em3d.msh）。 |
-| 2d triangle z file | 地形を反映した二次元三角形メッシュ（polygonz.msh）。観測点の z 座標の計算に使う。 |
-| local line file | em3d.msh の辺の情報（lineinfo.dat）。 |
-| Ocean mesh file. | 海洋の三次元メッシュ（ocean.msh）。節点数を vxyz, fxyz ファイルの読み込みに使う。 |
-| mesh ctl file | メッシュ生成に用いた制御ファイル（mesh.ctl、[付録B](#Appendix_mesh)）。 |
-| Vxyzfile | 海洋メッシュの節点における潮汐流速 $\mathbf{v}$（Kikai/fvxyz/ で作成、[5.6節](#sec5_6)）。 |
-| Fxyzfile | 海洋メッシュの節点における背景磁場 $\mathbf{F}$（同上）。 |
-| output folder | 結果の出力フォルダ（例: ./result/）。末尾に "/" を付ける。 |
-| header2d, header3d | ActFEM から引き継いだ項目。現在は使われないが、行は必要。 |
-
-itopofile、# of topofile、topofile、lon lat shift は読み込まれるが、現在の順計算では使われない（地形はメッシュに反映済み）。
+| 項目（ラベル） | 説明 | 順計算 | インバージョン |
+|:--|:--|:--|:--|
+| itopofile 0 or 1 | 1: 次の行から地形ファイルを指定する、0: 地形ファイルを指定しない（次の3行は書かない）。 | **未使用**（読む行数だけが変わる） | **未使用** |
+| # of topofile | 地形ファイルの数。ファイルごとに次の2行を繰り返す。 | **未使用** | **未使用** |
+| topofile | 地形ファイルのパス。ファイルは開かれない（地形はメッシュに反映済み）。 | **未使用** | **未使用** |
+| lon lat shift | 地形ファイルの経度・緯度のずらし量 [deg]。 | **未使用** | **未使用** |
+| mesh file | 三次元四面体メッシュ（em3d.msh）。計算境界もこのメッシュの外縁から決まる（下記）。 | 使用 | 使用 |
+| 2d triangle z file | 地形を反映した二次元三角形メッシュ（polygonz.msh）。観測点の z 座標の計算に使う。 | 使用 | 使用 |
+| local line file | em3d.msh の辺の情報（lineinfo.dat）。 | 使用 | 使用 |
+| Ocean mesh file. | 海洋の三次元メッシュ（ocean.msh）。節点数を vxyz, fxyz ファイルの読み込みに使う。 | 使用 | 使用 |
+| mesh ctl file | メッシュ生成に用いた制御ファイル（mesh.ctl、[付録B](#Appendix_mesh)）。 | ファイルは読まれるが、値は**未使用** | **未使用**（ファイルも読まれない） |
+| Vxyzfile | 海洋メッシュの節点における潮汐流速 $\mathbf{v}$（Kikai/fvxyz/ で作成、[5.6節](#sec5_6)）。 | 使用 | 使用 |
+| Fxyzfile | 海洋メッシュの節点における背景磁場 $\mathbf{F}$（同上）。 | 使用 | 使用 |
+| output folder | 結果の出力フォルダ（例: ./result/）。末尾に "/" を付ける。 | 使用 | **未使用**（joint.ctl の output folder を使う） |
+| header2d, header3d | ActFEM から引き継いだ項目。 | **未使用** | **未使用** |
 
 **B. 周波数と計算領域**
 
-| 項目（ラベル） | 説明 |
-|:--|:--|
-| # of frequency | 周波数の数。続けて周波数の数だけ "Frequency [Hz]" の行を書く。 |
-| Frequency [Hz] | 計算する周波数 [Hz]。サンプルは M2 分潮（周期 12.42 時間、$2.237\times10^{-5}$ Hz）。 |
-| west/east/south/north bound | 内側の領域の x の西端・東端、y の南端・北端 [km]。平面分布の出力範囲（D）に使う。 |
-| lenout [km] | 現在は使われないが、行は必要（以前は計算境界の位置の決定に使っていた）。 |
-| upz in, downz in [km] | 現在は使われないが、行は必要。 |
-| zmax, zmin [km] | 現在は使われないが、行は必要（以前は計算境界の位置の決定に使っていた）。 |
-| sizein ～ A_src | sizein, sizebo, sigma_obs, A_obs, dlen_source, sigma_src, A_src の7行は ActFEM のメッシュ生成から引き継いだ項目であり、現在は使われないが、行は必要。 |
+| 項目（ラベル） | 説明 | 順計算 | インバージョン |
+|:--|:--|:--|:--|
+| # of frequency | 周波数の数。続けて周波数の数だけ "Frequency [Hz]" の行を書く。 | 使用 | 使用 |
+| Frequency [Hz] | 計算する周波数 [Hz]。サンプルは M2 分潮（周期 12.42 時間、$2.237\times10^{-5}$ Hz）。 | 使用 | 使用 |
+| west/east/south/north bound | x の西端・東端、y の南端・北端 [km]。 | 平面分布（D、ixyflag = 1）の出力範囲**だけ**に使う | **未使用** |
+| lenout [km] | 以前は計算境界の位置の決定に使っていた。 | **未使用** | **未使用** |
+| upz in, downz in [km] | ActFEM から引き継いだ項目。 | **未使用** | **未使用** |
+| zmax, zmin [km] | 以前は計算境界の位置の決定に使っていた。 | **未使用** | **未使用** |
+| sizein ～ A_src | sizein, sizebo, sigma_obs, A_obs, dlen_source, sigma_src, A_src の7行。ActFEM のメッシュ生成から引き継いだ項目。 | **未使用** | **未使用** |
 
-計算境界（Dirichlet 境界条件）は、三次元メッシュ em3d.msh の節点座標の最大・最小値（xyzminmax）から自動的に決まる。ソルバーは、メッシュの外側の6面（x = xmin, xmax、y = ymin, ymax、z = zmin, zmax）上（0.01 km の許容幅。MT の境界と同じ）にある辺で $\mathbf{A}$ の接線成分を 0 とする（src/solver_mpi/forward_bxyz_mpi.f90、インバージョンでは src/src_inv_joint/forward_joint.f90 の GENBCCSEM）。制御ファイルの lenout、zmax、zmin は境界条件に影響しない。
+計算境界（Dirichlet 境界条件）は、三次元メッシュ em3d.msh の節点座標の最大・最小値（xyzminmax）から自動的に決まる。ソルバーは、メッシュの外側の6面（x = xmin, xmax、y = ymin, ymax、z = zmin, zmax）上（0.01 km の許容幅。MT の境界と同じ）にある辺で $\mathbf{A}$ の接線成分を 0 とする（src/solver_mpi/forward_bxyz_mpi.f90、インバージョンでは src/src_inv_joint/forward_joint.f90 の GENBCCSEM）。制御ファイルの west/east/south/north bound、lenout、zmax、zmin は境界条件に影響しない。計算領域を変えるには、mesh.ctl（lenout、nmcal lower/upper bnd）を変えてメッシュを作り直す（[付録B](#Appendix_mesh)）。
 
 **C. 観測点**
 
-| 項目（ラベル） | 説明 |
-|:--|:--|
-| # of observatory | 観測点の数。 |
-| lonlat(1),xyz (2) | 観測点座標の与え方 lonlatflag。0: 経度・緯度を、原点を中心とした正距円筒図法で x, y [km] に変換する、1: 経度・緯度を UTM 座標で x, y [km] に変換する、2: x, y [km] を直接与える。 |
-| UTM ZONE | UTM のゾーン（例: 52N）。lonlatflag = 1 のときだけ使われるが、行は常に必要。 |
-| lonlatorigin | 原点の経度・緯度 [deg]。 |
-| Name | 観測点名。観測点ごとに次の行と組で繰り返す。 |
-| xyz | lonlatflag = 0, 1 のとき経度 [deg]、緯度 [deg]、z [km]。lonlatflag = 2 のとき x, y, z [km]。 |
+| 項目（ラベル） | 説明 | 順計算 | インバージョン |
+|:--|:--|:--|:--|
+| # of observatory | 観測点の数。 | 使用 | 使用 |
+| lonlat(1),xyz (2) | 観測点座標の与え方 lonlatflag。0: 経度・緯度を、原点を中心とした正距円筒図法で x, y [km] に変換する、1: 経度・緯度を UTM 座標で x, y [km] に変換する、2: x, y [km] を直接与える。 | 使用 | 使用 |
+| UTM ZONE | UTM のゾーン（例: 52N）。行は常に必要。 | lonlatflag = 1 のときだけ使用 | lonlatflag = 1 のときだけ使用 |
+| lonlatorigin | 原点の経度・緯度 [deg]。 | 使用 | 使用 |
+| Name | 観測点名。観測点ごとに次の行と組で繰り返す。出力ファイル名に使われる。 | 使用 | 使用 |
+| xyz | lonlatflag = 0, 1 のとき経度 [deg]、緯度 [deg]、z [km]。lonlatflag = 2 のとき x, y, z [km]。 | 使用 | 使用 |
 
 観測点の z は、地表（海域では海底）からの相対値 [km] である。二次元三角形メッシュ（2d triangle z file）から観測点の位置の地表の z を求め、それに加えた値が観測点の z 座標になる（src/common/calzobsr.f90）。サンプルの -0.001 は海底下 1 m を意味する。Name・xyz の行頭の "12" や "11" はラベル部分（1〜20列目）にあるので、読まれない。
 
 **D. 平面分布の出力**
 
-| 項目（ラベル） | 説明 | 条件 |
-|:--|:--|:--|
-| 0:no,1:nxny,2:ntrik | ixyflag。0: 出力しない、1: 内側の領域を nx × ny の格子に分けて出力する、2: 地表の三角形すべてについて出力する。 | |
-| file head | 出力ファイル名の頭（例: bxyz_xy2D）。 | ixyflag = 1, 2 |
-| nx, ny | x, y 方向の格子数。格子点は各セルの中心。 | ixyflag = 1 |
-| 1:same z,2:seafloor | ixydepth。1: 一定の z で出力する（次の行に z [km] を書く）、2: 海底（地表）の直下で出力する。 | ixyflag = 1 |
-| ki23dfile | 二次元三角形メッシュ（polygonki.msh）のパス。 | ixyflag = 1, 2 |
-| nx,ny->ki23dptr fl | 二次元メッシュと海洋メッシュの節点の対応ファイル（ki23dptr.dat）のパス。 | ixyflag = 1, 2 |
+| 項目（ラベル） | 説明 | 条件 | 順計算 | インバージョン |
+|:--|:--|:--|:--|:--|
+| 0:no,1:nxny,2:ntrik | ixyflag。0: 出力しない、1: west/east/south/north bound の範囲を nx × ny の格子に分けて出力する、2: 地表の三角形すべてについて出力する。 | | 使用 | **未使用** |
+| file head | 出力ファイル名の頭（例: bxyz_xy2D）。 | ixyflag = 1, 2 | 使用 | **未使用** |
+| nx, ny | x, y 方向の格子数。格子点は各セルの中心。 | ixyflag = 1 | 使用 | **未使用** |
+| 1:same z,2:seafloor | ixydepth。1: 一定の z で出力する（次の行に z [km] を書く）、2: 海底（地表）の直下で出力する。 | ixyflag = 1 | 使用 | **未使用** |
+| ki23dfile | 二次元三角形メッシュ（polygonki.msh）のパス。 | ixyflag = 1, 2 | 使用 | **未使用** |
+| nx,ny->ki23dptr fl | 二次元メッシュと海洋メッシュの節点の対応ファイル（ki23dptr.dat）のパス。 | ixyflag = 1, 2 | 使用 | **未使用** |
 
-ixyflag = 2 の場合は、file head の次に ki23dfile と ki23dptr ファイルの2行を書く。
+ixyflag = 2 の場合は、file head の次に ki23dfile と ki23dptr ファイルの2行を書く。インバージョンでは平面分布は出力されないが、ixyflag に応じた行数は読まれるので、行は必要である。
 
 **E. 送信源**
 
-ActFEM から引き継いだ電流ダイポール送信源の項目である。潮汐の計算では送信源の電流は使われない（右辺は起電力 $\sigma\,\mathbf{v}\times\mathbf{F}$、[4章](#Governing_equation)）。ただし送信源の数と名前は出力ファイル名（例: P5_S1.dat の "S1"）に使われるため、送信源を1つ書いておく。
+ActFEM から引き継いだ電流ダイポール送信源の項目である。潮汐の計算の励起源は起電力 $\sigma\,\mathbf{v}\times\mathbf{F}$（[4章](#Governing_equation)）であり、送信源の電流は使われない。ただし送信源の数と名前は出力ファイル名（例: P5_S1.dat の "S1"）に使われるため、送信源を1つ書いておく。
 
-| 項目（ラベル） | 説明 |
-|:--|:--|
-| # of sources | 送信源の数（潮汐では 1）。送信源ごとに次の3行を繰り返す。 |
-| Source Name | 送信源名（出力ファイル名に使われる）。 |
-| source start point, source end point | 送信源の始点・終点。lonlatflag = 1 のとき経度・緯度 [deg] と z [km]、それ以外は x, y, z [km]。 |
-| Elcetric current[A] | 送信電流 [A]。潮汐の計算では使われない（サンプルは 0.0）。 |
+| 項目（ラベル） | 説明 | 順計算 | インバージョン |
+|:--|:--|:--|:--|
+| # of sources | 送信源の数（潮汐では 1）。送信源ごとに次の3行を繰り返す。 | 使用（出力ファイル名） | 使用（出力ファイル名） |
+| Source Name | 送信源名。 | 使用（出力ファイル名） | 使用（出力ファイル名） |
+| source start point, source end point | 送信源の始点・終点。lonlatflag = 1 のとき経度・緯度 [deg] と z [km]、それ以外は x, y, z [km]。始点の位置で地表の z を求めるので、メッシュの水平範囲の中に置く。 | z を計算してログに出すだけ（計算には**未使用**） | 作図用の \<送信源名\>_site.dat に書き出すだけ（計算には**未使用**） |
+| Elcetric current[A] | 送信電流 [A]（サンプルは 0.0）。 | **未使用** | **未使用** |
 
 **F. 比抵抗構造**
 
-| 項目（ラベル） | 説明 | 条件 |
-|:--|:--|:--|
-| sigma_air [S/m] | 空気（物理グループ 1）の導電率 [S/m]。 | |
-| condflag 0:home,1: | 0: 陸・海底下を物理グループごとに一様な導電率で与える、1: 比抵抗ファイルで与える。 | |
-| nvolume | 陸・海底下の物理グループの数。続けてその数だけ導電率 [S/m] を1行に1つ書く。 | condflag = 0 |
-| condfile | 比抵抗ファイル（Kikai/structure/ の cond_*.msh、[5.5節](#sec5_5)）のパス。 | condflag = 1 |
+| 項目（ラベル） | 説明 | 条件 | 順計算 | インバージョン |
+|:--|:--|:--|:--|:--|
+| sigma_air [S/m] | 空気（物理グループ 1）の導電率 [S/m]。 | | 使用 | 使用 |
+| condflag 0:home,1: | 0: 陸・海底下を物理グループごとに一様な導電率で与える、1: 比抵抗ファイルで与える。 | | 使用 | 読まれる（下記） |
+| nvolume | 陸・海底下の物理グループの数。続けてその数だけ導電率 [S/m] を1行に1つ書く。 | condflag = 0 | 使用 | 読まれる（下記） |
+| condfile | 比抵抗ファイル（Kikai/structure/ の cond_*.msh、[5.5節](#sec5_5)）のパス。 | condflag = 1 | 使用 | 読まれる（下記） |
 
-海洋（物理グループ 2）の導電率は 3.33 S/m にソース内で固定されている（[付録A.2](#secA_2)）。
+海洋（物理グループ 2）の導電率は 3.33 S/m にソース内で固定されている（[付録A.2](#secA_2)）。インバージョンでは condfile も読み込まれるが、陸・海底下の比抵抗の値は joint.ctl で指定する初期モデル・参照モデル（[8章](#Inversion_control)）に置き換えられる。
 
-### 7.3 例（Kikai/fwd_tide/tide_fwd.ctl の一部） <a id="sec7_3"></a>
+### 7.3 例（Kikai/fwd_tide/tide_fwd.ctl） <a id="sec7_3"></a>
+    ## lines starting with "##" work as lines for comments ! 2020.09.28
+    ## this file is forward control file
+    ## [UNUSED] marks lines that are read but not used in the calculation.          2026.11.26 CC
+    ## Do not delete [UNUSED] lines: items are read in a fixed order.               2026.11.26 CC
+    ## fwd = forward (ebfem_bxyz_mpi.exe), inv = inversion (ebfem_inv_joint.exe)    2026.11.26 CC
     ##-----10!-------20!
+    ## [UNUSED] itopofile, # of topofile, topofile, lon lat shift (topography is already in the mesh) 2026.11.26 CC
+    ##          itopofile=1 needs the next 3 lines, itopofile=0 needs none                             2026.11.26 CC
     itopofile 0 or 1   !1
     # of topofile      !1
     topofile           !../topo/etopo_kikai-l.xyz
@@ -366,42 +373,61 @@ ActFEM から引き継いだ電流ダイポール送信源の項目である。�
     2d triangle z file !../mesh/polygonz.msh
     local line file    !../mesh/lineinfo.dat
     Ocean mesh file.   !../mesh/ocean.msh
+    ## mesh ctl file: fwd reads the file but its values are not used; inv does not read it 2026.11.26 CC
     mesh ctl file      !../mesh/mesh.ctl
     Vxyzfile           !../fvxyz/vxyz_mesh
     Fxyzfile           !../fvxyz/fxyz_mesh
+    ## output folder: used in fwd; inv uses "output folder" in joint.ctl instead 2026.11.26 CC
     output folder      !./result/
+    ## [UNUSED] header2d, header3d 2026.11.26 CC
     header2d  (a50)    !nakadake2d
     header3d  (a50)    !nakadake3d
     # of frequency     !1
     Frequency [Hz]     !0.00002237
+    ## west/east/south/north bound [km]: used only for the plan-view output range (ixyflag=1) in fwd 2026.11.26 CC
     west bound         !-200.0
     east bound         !200.0
     south bound        !-200.0
     north bound        !200.0
+    ## [UNUSED] lenout ... A_src (12 lines). Dirichlet boundaries are set at the outer faces of em3d.msh 2026.11.26 CC
     lenout [km]        !100.0
     upz in [km]  (>0)  !500.0
     downz in [km](<0)  !-500.0
     zmax   [km]        !1000.0
     zmin   [km]        !-1000.0
-    （中略：sizein 〜 A_src の7行）
+    sizein [km]        !0.10
+    sizebo [km]        !2.0
+    sigma_obs [km]     !0.4
+    A_obs     [km]     !0.01
+    dlen_source [km]   !0.1
+    sigma_src [km]     !0.3
+    A_src     [km]     !0.005
     # of observatory   !14
     lonlat(1),xyz (2)  !0
+    ## UTM ZONE: used only when lonlat(1),xyz(2) = 1 (the line is always required) 2026.11.26 CC
     UTM ZONE           |52N
     lonlatorigin       !130.000000     30.500000
     12  Name           !P5
     12  xyz            !130.3583       30.6500        -0.001
     （中略：P6〜P18）
+    ## plan-view output (ixyflag ... ki23dptr): used in fwd only; [UNUSED] in inv 2026.11.26 CC
     0:no,1:nxny,2:ntrik!1
     file head          !bxyz_xy2D
     nx, ny             !200        200
     1:same z,2:seafloor!2
     ki23dfile          !../mesh/polygonki.msh
     nx,ny->ki23dptr fl !../mesh/ki23dptr.dat
+    ## Source: the tidal source is v x F; the dipole source of ActFEM is not used.            2026.11.26 CC
+    ##  # of sources and Source Name: used for output file names (e.g. P5_S1.dat)            2026.11.26 CC
+    ##  start/end points: only their z is calculated (put them inside the mesh); inv writes   2026.11.26 CC
+    ##                    them to <source>_site.dat for plots                                 2026.11.26 CC
+    ##  [UNUSED] Elcetric current[A]                                                         2026.11.26 CC
     # of sources       !1
-    Source Name        !S1
     source start point !189.354722   -24.33944  -0.001
     source end   point !189.254722   -24.33944  -0.001
     Elcetric current[A]!0.0
+    ## sigma_air, condflag, condfile: used in fwd. In inv, sigma_air is used and condfile is read,   2026.11.26 CC
+    ##  but resistivity values are replaced by the initial/reference models in joint.ctl             2026.11.26 CC
     sigma_air    [S/m] !1.e-8
     condflag 0:home,1: !1
     ##nvolume            !1
@@ -660,7 +686,7 @@ TMTGEM（および ActFEMtide）で最も重要かつ難しいのは、潮汐（
 4. 空気と固体地球の三次元四面体メッシュ（mesh2）を生成する
 5. mesh1 と mesh2 を結合し、三次元電磁場シミュレーション用のメッシュを作る
 
-流れの理解には Minami et al. (2017) の Fig. 1 を参照されたい。Kikai/mesh/tetmeshgen.sh の各段階との対応は次の通りである。順計算（[5章](#Forward_tutorial)）とインバージョン（[6章](#Inversion_tutorial)）は、どちらもこのスクリプトで作った Kikai/mesh/ のメッシュを使う。三次元メッシュの外枠（pre3d.geo の8頂点）の x, y は、二次元メッシュ polygonki.msh の水平方向の範囲に合わせている。二次元メッシュの外縁は、coastline.exe が計算範囲（focus area + lenout）を地形データの格子線まで外側に丸めて決めるため、mesh.ctl から計算した範囲より少し広い（Kikai では x 方向に約 0.6 km、y 方向に約 1.3 km）。以前は外枠に mesh.ctl から計算した範囲をそのまま使っていたため、em3d.msh の側面が z = 0 で折れ曲がり、平面になっていなかった（2026年11月26日に修正）。gmsh には `-setnumber General.RandomSeed 12345`（同じメッシュを再現するための乱数の種の固定）と `-format msh2` も与えている。
+流れの理解には Minami et al. (2017) の Fig. 1 を参照されたい。Kikai/mesh/tetmeshgen.sh の各段階との対応は次の通りである。順計算（[5章](#Forward_tutorial)）とインバージョン（[6章](#Inversion_tutorial)）は、どちらもこのスクリプトで作った Kikai/mesh/ のメッシュを使う。三次元メッシュの外枠（pre3d.geo の8頂点）の x, y は、二次元メッシュ polygonki.msh の水平方向の範囲に合わせている。二次元メッシュの外縁は、coastline.exe が計算範囲（focus area + lenout）を地形データの格子線まで外側に丸めて決めるため、mesh.ctl から計算した範囲より少し広い（Kikai では x 方向に約 0.6 km、y 方向に約 1.3 km）。以前は外枠に mesh.ctl から計算した範囲をそのまま使っていたため、em3d.msh の側面が z = 0 で折れ曲がり、平面になっていなかった（2026年11月26日に修正）。また、gmsh が海面・海底・地表の三角形を背景メッシュ bgmesh3d.pos に合わせて分割し直し、ocean.msh にない節点を加えていたため、em3d.msh が海と空気・地殻の境界で不整合（面がつながっていない状態）になっていた。現在は mk3dgeo.exe が pre3d.geo の末尾に `Transfinite Line{1:nline} = 2;` と `Transfinite Surface{1:ntriall};` を書き出し、これらの三角形を分割させないようにしている（2026年11月27日に修正）。メッシュの境界の三角形と不整合な面は、Kikai/mesh/plot_surface_mesh.sh で図示して確認できる。gmsh には `-setnumber General.RandomSeed 12345`（同じメッシュを再現するための乱数の種の固定）と `-format msh2` も与えている。
 
 | tetmeshgen.sh | 実行するプログラム | 内容 |
 |:--:|:--|:--|
