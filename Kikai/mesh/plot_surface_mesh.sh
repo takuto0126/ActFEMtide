@@ -100,7 +100,7 @@ Rzoom=-$zoom/$zoom/-$zoom/$zoom
 gmt begin $out png E200
 gmt set FONT_TITLE 12p FONT_LABEL 10p FONT_ANNOT_PRIMARY 9p
 gmt makecpt -Cgeo -T-1/3/0.1 -H > surface_land.cpt   # land elevation [km]
-gmt subplot begin 1x2 -Fs12c/12c -M1c/0.5c -T"Surface triangles of em3d.msh (blue: sea surface, colored: ground, pink: non-conforming sea surface)"
+gmt subplot begin 1x2 -Fs12c/12c -M1c/0.5c -T"Surface triangles of em3d.msh"
 #--- whole domain
 gmt subplot set 0
 gmt plot $land -R$Rall -JX12c -Csurface_land.cpt -L -W0.1p,gray30 -Bxaf+l"Easting [km]" -Byaf+l"Northing [km]" -BWSne+t"Whole domain"

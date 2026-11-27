@@ -15,6 +15,7 @@ SUBROUTINE SORT_INDEX(N,NA,RA)
 	INTEGER(4) :: N
 	INTEGER(4),DIMENSION(N) :: NA
       REAL(8)   ,DIMENSION(N) :: RA
+      IF (N .LT. 2) RETURN ! N=1 accessed RA(0) below (as in Numerical Recipes, return for N<2) 2026.11.27 CC
       L=N/2+1
       IR=N
 10    CONTINUE

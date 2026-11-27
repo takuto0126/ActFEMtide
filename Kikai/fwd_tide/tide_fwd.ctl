@@ -16,7 +16,8 @@ local line file    !../mesh/lineinfo.dat
 Ocean mesh file.   !../mesh/ocean.msh
 ## mesh ctl file: fwd reads the file but its values are not used; inv does not read it 2026.11.26 CC
 mesh ctl file      !../mesh/mesh.ctl
-Vxyzfile           !../fvxyz/vxyz_mesh
+## Vxyzfile: vxyz_mesh_HAMTIDE or vxyz_mesh_OTPS, made by ../fvxyz/mkfvxyz_mesh.sh 2026.11.27 CC
+Vxyzfile           !../fvxyz/vxyz_mesh_OTPS
 Fxyzfile           !../fvxyz/fxyz_mesh
 ## output folder: used in fwd; inv uses "output folder" in joint.ctl instead 2026.11.26 CC
 output folder      !./result/

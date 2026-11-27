@@ -75,8 +75,9 @@ integer(4)                            :: icount_act,icount_mt
 !#[1-3]## set ip_from_f_tot(2,nfreq_tot) : i-th frequency -> ip 
    allocate( ip_from_tot(nf_tot))
    do i=1,nf_tot
-    if (mod(i,np) .eq. 1 ) ip_from = -1
-    ip_from = ip_from + 1 
+!    if (mod(i,np) .eq. 1 ) ip_from = -1 ! commented out 2026.11.27 CC (ip_from was not initialized when np=1)
+!    ip_from = ip_from + 1               ! commented out 2026.11.27 CC
+    ip_from = mod(i-1,np)                ! same as ii = ip+1+(i-1)*np in [2-2] 2026.11.27 CC
     ip_from_tot(i) = ip_from
    end do
    call checkfreq_tot( nf_act,nf_mt,nn,nf_tot,f_tot,ind_f_tot,ip_from_tot,ipp) !2022.12.05

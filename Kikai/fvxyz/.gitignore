@@ -1,4 +1,8 @@
 *_mesh
-checkuxyz
-checkvxyz
+*_mesh_OTPS
+*_mesh_HAMTIDE
+*.raw
+checku*
+checkv*
 Model_*_v3
+em3dspherical.msh

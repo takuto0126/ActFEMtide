@@ -12,7 +12,7 @@
 # ActFEMtide マニュアル
 ## 潮汐起源電磁場のための有限要素法シミュレーションコード
 
-#### 2026年7月23日現在
+#### バージョン 1.0（2026年11月）
 
 南 拓人
 tminami@port.kobe-u.ac.jp
@@ -39,6 +39,7 @@ tminami@port.kobe-u.ac.jp
    - [6.3 Step 3: MT の合成データの作成](#sec6_3)
    - [6.4 Step 4: インバージョンの実行](#sec6_4)
    - [6.5 Step 5: 結果の確認](#sec6_5)
+   - [6.6 計算時間の目安](#sec6_6)
 7. [順計算の制御ファイル（tide_fwd.ctl）](#Forward_control)
    - [7.1 共通の規則](#sec7_1)
    - [7.2 項目一覧](#sec7_2)
@@ -49,6 +50,8 @@ tminami@port.kobe-u.ac.jp
    - [8.2 項目一覧](#sec8_2)
    - [8.3 例](#sec8_3)
    - [8.4 データファイルの形式](#sec8_4)
+9. [バージョン履歴](#Version_history)
+   - [v1.0](#v1_0)
 - [参考文献](#References)
 - [付録A 離散化](#Appendix_discretization)
    - [A.1 弱形式](#secA_1)
@@ -60,13 +63,18 @@ tminami@port.kobe-u.ac.jp
    - [B.1 メッシュ生成の流れ](#secB_1)
    - [B.2 制御ファイル（mesh.ctl）](#secB_2)
    - [B.3 パラメータの意味](#secB_3)
+- [付録C 潮汐モデル（OTPS・HAMTIDE）と ActFEMtide の位相の扱い](#Appendix_phase)
+   - [C.1 ActFEMtide の約束事](#secC_1)
+   - [C.2 潮汐モデルの位相](#secC_2)
+   - [C.3 ActFEMtide での複素振幅](#secC_3)
+   - [C.4 陸・モデル範囲外の節点](#secC_4)
 
 
 ## 1 はじめに <a id="Introduction"></a>
 __ActFEMtide__ は、海洋中の起電力を介して潮汐起源の電磁場を計算するためのシミュレーションコードである。メインのソルバーは __ActFEM__ [(Minami et al. 2018)](#Minami2018) をベースとしており、励起源を電流ダイポールから潮汐起源の起電力（$\mathbf{v}\times \mathbf{F}$）に置き換えたものである。
 __ActFEMtide__ は Fortran で書かれており、疎行列直接解法ソルバー PARDISO を使用するために Intel Math Kernel Library (mkl) を利用する。ActFEMtide は PARDISO による並列計算に openMP を、複数周波数に対する並列計算に MPI を使用できる。
 __ActFEMtide__ は __TMTGEM__ [(Minami et al. 2017)](#Minami2017) のために開発されたメッシュ生成部を使用している（[付録B](#Appendix_mesh)）。
-ActFEMtide は 1: メッシュ生成部、2: シミュレーション部の2つの部分から構成される。__ActFEMtide__ は現在、[(Egbert and Erofeeva, 2002)](#EE2002) による潮汐モデルの出力を使用することを前提としている。
+ActFEMtide は 1: メッシュ生成部、2: シミュレーション部の2つの部分から構成される。潮汐流速には、無償で入手できる HAMTIDE [(Taguchi et al., 2014)](#Taguchi2014)（既定）または OTPS/TPXO [(Egbert and Erofeeva, 2002)](#EE2002) の潮汐モデルの出力を用いる（[5.1節](#sec5_1)、[付録C](#Appendix_phase)）。
 __ActFEMtide__ はメッシュ生成に [Gmsh](https://www.soest.hawaii.edu/gmt/) を使用し、[Oishi et al. (2013)](#O2013) に記載された extrude アルゴリズムを用いる。これはもともと __TMTGEM__ のために開発されたものである。extrusion のためのサブルーチンの多くは、流体シミュレーションのオープンソースコードである [Fluidity](http://fluidityproject.github.io/) に由来する。
 
 なお、本マニュアルには __TMTGEM__ マニュアル（v1.3）からの流用箇所が多く含まれることに注意されたい。
@@ -78,7 +86,7 @@ __支配方程式:__ [4 支配方程式](#Governing_equation) を参照（[Minam
 
 __入力する地形データ:__ 経度 [deg], 緯度 [deg], 高度 [m, __下向き正__]
 
-__使用する潮汐モデル:__ [Egbert and Erofeeva (2002)](#EE2002)
+__使用する潮汐モデル:__ HAMTIDE [(Taguchi et al., 2014)](#Taguchi2014)（既定、無償で入手可能）または OTPS/TPXO [(Egbert and Erofeeva, 2002)](#EE2002)。位相の扱いは[付録C](#Appendix_phase)を参照
 
 ## 3 必要な環境 <a id="Required_environments"></a>
 以下のパッケージをPCにインストールしておくこと:
@@ -99,24 +107,44 @@ ActFEMtide のソルバーは __ActFEM__ [(Minami et al. 2018)](#Minami2018) と
 
 $$\mathbf{j} = \sigma\left( \mathbf{E} + \mathbf{v}\times\mathbf{F} \right)$$
 
-となる。変位電流を無視したアンペールの法則 $\nabla\times\mathbf{B} = \mu\mathbf{j}$ に $\mathbf{B} = \nabla\times\mathbf{A}$ を代入し、ActFEM と同じ規約 $\mathbf{E} = i\omega\mathbf{A}$ で電場を表すと、ActFEMtide が解く支配方程式
+となる。変位電流を無視したアンペールの法則 $\nabla\times\mathbf{B} = \mu\mathbf{j}$ に $\mathbf{B} = \nabla\times\mathbf{A}$ を代入し、時間依存を $e^{i\omega t}$（$\partial/\partial t = i\omega$）とし、ActFEM [(Minami et al. 2018)](#Minami2018) と同じく電場を $\mathbf{E} = -\partial\mathbf{A}/\partial t = -i\omega\mathbf{A}$ で表すと、$\mu\mathbf{j} = \mu\sigma\left(-i\omega\mathbf{A} + \mathbf{v}\times\mathbf{F}\right)$ より、ActFEMtide が解く支配方程式
 
 $$\nabla\times\left( \nabla\times\mathbf{A} \right) + i\omega\mu\sigma\mathbf{A} = \mu\sigma\left( \mathbf{v}\times\mathbf{F} \right) \cdot \cdot \cdot (4.1)$$
 
 が得られる。ここで $\omega$ は潮汐分潮の角周波数、$\mu$ は透磁率（真空の透磁率 $\mu_0$ を使用）である。ActFEM の式 $\nabla\times\nabla\times\mathbf{A} + i\omega\mu\sigma\mathbf{A} = \mu\mathbf{i}_s$ と比べると、送信源電流 $\mathbf{i}_s$ が起電力による電流 $\sigma\,\mathbf{v}\times\mathbf{F}$ に置き換わっている。
 
-- $\mathbf{v}$ は潮汐流速であり、[Egbert and Erofeeva (2002)](#EE2002) の潮汐モデルから得た複素振幅（振幅と位相）で与える。水平2成分のみを使用し、鉛直成分は $v_z = 0$ とする。
+- $\mathbf{v}$ は潮汐流速であり、潮汐モデル（HAMTIDE または OTPS）の振幅 $a$ とグリニッジ位相の遅れ $G$ から、複素振幅 $a\,e^{-iG}$ として与える（[付録C](#Appendix_phase)）。水平2成分のみを使用し、鉛直成分は $v_z = 0$ とする。
 - $\mathbf{F}$ は背景磁場（3成分、実数）である。
 - 起電力項は海洋要素（物理グループ 2）にのみ存在する。
 
 
-## 5 順計算のチュートリアル（Kikai/fwd_tide/） <a id="Forward_tutorial"></a>
+## 5 順計算のチュートリアル（Kikai/fwd_tide_H/, Kikai/fwd_tide/） <a id="Forward_tutorial"></a>
 とにかく ActFEMtide を実行してみよう！！
 ActFEMtide のホームフォルダ内に、サンプルシミュレーション用の Kikai/ フォルダがある。
 ここでは、鬼海カルデラ周辺を対象として、潮汐モデルの準備・メッシュ生成・比抵抗構造の作成を経て、M2 潮汐による潮汐起源電磁場を順計算するまでを、以下のステップで実行する。Step 0〜5 で作成するファイルは、[6章](#Inversion_tutorial)の逆計算でもそのまま使う。
 
+潮汐流速に使う潮汐モデルによって、順計算のフォルダが分かれている。HAMTIDE は無償で入手できるので、初めて使う場合は HAMTIDE のフォルダで実行するとよい。
+
+| フォルダ | 潮汐モデル | tide_fwd.ctl の Vxyzfile | 対応するインバージョンのフォルダ |
+|:--|:--|:--|:--|
+| Kikai/fwd_tide_H/ | HAMTIDE | ../fvxyz/vxyz_mesh_HAMTIDE | inv_tide_H, inv_mt_H, inv_joint_H |
+| Kikai/fwd_tide/ | OTPS（TPXO） | ../fvxyz/vxyz_mesh_OTPS | inv_tide, inv_mt, inv_joint |
+
+2つのフォルダの中身は tide_fwd.ctl の Vxyzfile 以外同じである。以下では HAMTIDE の場合を示し、OTPS の場合の違いを併記する。
+
 ### 5.1 Step 0: 潮汐モデルの準備（ActFEMtide/mkfvxyz/） <a id="sec5_1"></a>
-[(Egbert and Erofeeva, 2002)](#EE2002) のコードを ActFEMtide/mkfvxyz/ 内でコンパイルする
+潮汐流速には HAMTIDE [(Taguchi et al., 2014)](#Taguchi2014) と OTPS/TPXO [(Egbert and Erofeeva, 2002)](#EE2002) のどちらかを使う。既定は HAMTIDE である。
+
+**データの入手方法の違い**: HAMTIDE のデータは、ActFEMtide に含まれるスクリプト（mkfvxyz/HAMTIDE/get_hamtide.sh）で自動的にダウンロードできる。一方、OTPS で使う TPXO のデータは公開のダウンロード先がなく、自動ではダウンロードできない。TPXO の作者である S. Erofeeva（Oregon State University）に連絡して利用登録を行い、提供を受ける必要がある。TPXO は学術研究などの非商用利用では無償だが登録が必要であり、商用利用にはライセンスが必要である（https://www.tpxo.net/tpxo-products-and-registration を参照）。
+
+**HAMTIDE（既定）**: ハンブルク大学 ICDC から無償で入手できる。ActFEMtide のスクリプトで自動的にダウンロードでき、次のコマンドで M2 の流速ファイル HAMcurrent11a_m2.nc（約 66 MB）を mkfvxyz/HAMTIDE/ にダウンロードする。
+
+    $cd mkfvxyz/HAMTIDE
+    $./get_hamtide.sh            (他の分潮も必要なら ./get_hamtide.sh m2 s2 k1 o1 のように指定する)
+
+HAMTIDE のデータを使う場合は、Taguchi et al. (2014) を引用し、"Distributed in netCDF format by the Integrated Climate Data Center (ICDC), CEN, University of Hamburg, Hamburg, Germany." と記すこと。
+
+**OTPS（任意）**: TPXO のデータは自動ではダウンロードできず、Erofeeva に連絡して提供を受ける必要がある。[(Egbert and Erofeeva, 2002)](#EE2002) のコードを ActFEMtide/mkfvxyz/ 内でコンパイルする
 ####  
     $cd mkfvxyz
     $cd OTPS
@@ -146,6 +174,15 @@ DATA フォルダ内に、以下のファイルが準備されていることを
 
 メッシュの生成に成功していれば、メッシュを見ることができる。
 
+em3d.msh の海面と地表の三角形は、次のスクリプトで図示できる（GMT と python3 を使う）。
+
+    $./plot_surface_mesh.sh        (surface_mesh.png が生成される。引数で拡大図の範囲 [km] を変えられる。既定は 200)
+
+em3d.msh には四面体しか含まれないため、このスクリプトは、空気（領域 1）と海洋（領域 2）の境の面を海面、空気と固体地球（領域 3）の境の面を地表として取り出して描く。海洋メッシュの海面の三角形のうち、空気側の面とつながっていないもの（メッシュの不整合）があれば、ピンクで塗られる。正しく生成されたメッシュでは、その数（"non-conforming sea-surface triangles of ocean mesh"）は 0 になる（[9章](#Version_history)）。
+
+![Fig.1](./images/surface_mesh.png)
+図1. Kikai/mesh で作成したメッシュ（mesh.ctl: lenout = 3000 km、sizeout = 500 km）の海面（青線）と地表（標高で色分け）の三角形。左は計算領域全体、右は観測点（赤三角）周辺の拡大（±200 km、左図の赤枠）。この図は plot_surface_mesh.sh により生成される。
+
 ### 5.5 Step 4: 比抵抗構造の作成（Kikai/structure/） <a id="sec5_5"></a>
 #### 生成したメッシュをもとに比抵抗構造を作成する
     $cd ../structure
@@ -155,33 +192,40 @@ DATA フォルダ内に、以下のファイルが準備されていることを
 ### 5.6 Step 5: 潮汐流と背景磁場の準備（Kikai/fvxyz/） <a id="sec5_6"></a>
 ####
     $cd ../fvxyz
-    $./mkfvxyz_mesh.sh
+    $./mkfvxyz_mesh.sh           (HAMTIDE を使う。vxyz_mesh_HAMTIDE と fxyz_mesh が生成される)
+    $./mkfvxyz_mesh.sh OTPS      (OTPS を使う場合。vxyz_mesh_OTPS と fxyz_mesh が生成される)
 
-### 5.7 Step 6: 順計算の実行（Kikai/fwd_tide/） <a id="sec5_7"></a>
+両方のモデルを使う場合は、両方を実行しておく（fxyz_mesh は潮汐モデルによらず同じ）。
+
+背景磁場 fxyz_mesh は IGRF から計算する。潮汐流速のファイル名は使った潮汐モデルを表し、順計算・インバージョンで使うファイルは tide_fwd.ctl の Vxyzfile で指定する（[7.2節](#sec7_2)）。潮汐モデルの陸やモデルの範囲外にかかる海洋メッシュの節点には、最寄りの有効な節点の流速を与える。振幅・位相から複素振幅への変換は[付録C](#Appendix_phase)を参照。
+
+### 5.7 Step 6: 順計算の実行（Kikai/fwd_tide_H/ または Kikai/fwd_tide/） <a id="sec5_7"></a>
 ####
-    $cd ../fwd_tide
+    $cd ../fwd_tide_H            (OTPS の場合は cd ../fwd_tide)
     $./run_fwd.sh
-計算の設定は制御ファイル tide_fwd.ctl で与える（[7章](#Forward_control)）。結果は result/ に出力される（[7.4節](#sec7_4)）。
+計算の設定は制御ファイル tide_fwd.ctl で与える（[7章](#Forward_control)）。結果は result/ に出力される（[7.4節](#sec7_4)）。使う潮汐流速のファイルは tide_fwd.ctl の Vxyzfile で決まる（fwd_tide_H では vxyz_mesh_HAMTIDE、fwd_tide では vxyz_mesh_OTPS）。
 
-### 5.8 Step 7: 結果の確認（Kikai/fwd_tide/） <a id="sec5_8"></a>
+### 5.8 Step 7: 結果の確認（Kikai/fwd_tide_H/ または Kikai/fwd_tide/） <a id="sec5_8"></a>
     $./plot_bxyz.sh
     $./plot_ixyh.sh
 以下の2つの図が生成される。
 
 ![Fig.1](./images/bxyz.png)
-図1. M2潮汐による潮汐起源磁場。3成分すべて海底における値である。この図は plot_bxyz.sh により生成される。
+図2. M2潮汐による潮汐起源磁場。3成分すべて海底における値である。この図は plot_bxyz.sh により生成される。
 
 ![Fig.2](./images/ixyh.png)
-図2. M2潮汐による磁場・電場の実部および虚部。この図は plot_ixyh.sh により生成される。
+図3. M2潮汐による磁場・電場の実部および虚部。この図は plot_ixyh.sh により生成される。
 
 ## 6 逆計算（インバージョン）のチュートリアル（Kikai/inv_*/） <a id="Inversion_tutorial"></a>
-ActFEMtide のインバージョンコード（src/src_inv_joint/ebfem_inv_joint.exe）は、潮汐起源電磁場データ、MT データ、またはその両方から比抵抗構造を推定する。Kikai/ には次の3つのサンプルがある。
+ActFEMtide のインバージョンコード（src/src_inv_joint/ebfem_inv_joint.exe）は、潮汐起源電磁場データ、MT データ、またはその両方から比抵抗構造を推定する。Kikai/ には次の3種類のサンプルがあり、それぞれ HAMTIDE 用（フォルダ名の末尾が _H）と OTPS 用がある。
 
-| フォルダ | 使用データ | ijoint | 標準入力に与えるファイル（順番） | MPI プロセス数 |
+| フォルダ（HAMTIDE / OTPS） | 使用データ | ijoint | 標準入力に与えるファイル（順番） | MPI プロセス数 |
 |:--|:--|:--:|:--|:--:|
-| Kikai/inv_tide/ | 潮汐起源磁場のみ | 1 | tide_fwd.ctl, joint.ctl | 1 |
-| Kikai/inv_mt/ | MT インピーダンスのみ | 2 | mt.ctl, joint.ctl | 6 |
-| Kikai/inv_joint/ | 潮汐起源磁場 + MT インピーダンス | 3 | tide_fwd.ctl, mt.ctl, joint.ctl | 6 |
+| Kikai/inv_tide_H/ ・ Kikai/inv_tide/ | 潮汐起源磁場のみ | 1 | tide_fwd.ctl, joint.ctl | 1 |
+| Kikai/inv_mt_H/ ・ Kikai/inv_mt/ | MT インピーダンスのみ | 2 | mt.ctl, joint.ctl | 6 |
+| Kikai/inv_joint_H/ ・ Kikai/inv_joint/ | 潮汐起源磁場 + MT インピーダンス | 3 | tide_fwd.ctl, mt.ctl, joint.ctl | 6 |
+
+_H のフォルダの tide_fwd.ctl は ../fwd_tide_H/tide_fwd.ctl へのシンボリックリンクで、joint.ctl は ../fwd_tide_H/data_inv/ のデータを読む。_H の付かないフォルダは、それぞれ ../fwd_tide/ を使う。inv_mt_H と inv_mt は潮汐のデータを使わないので、結果は同じである。
 
 - 実行プログラムには、まず ijoint（1: 潮汐のみ、2: MT のみ、3: 両方）を与え、続けて順計算の制御ファイルとインバージョン制御ファイル（joint.ctl、[8章](#Inversion_control)）のパスを与える。
 - tide_fwd.ctl は潮汐順計算（[5.7節](#sec5_7)、[7章](#Forward_control)）と同じ形式の制御ファイルであり、メッシュ、観測点、周波数などを指定する。mt.ctl は MT 順計算の制御ファイルである。インバージョンの比抵抗モデル（初期モデル・参照モデル）は joint.ctl で指定する。
@@ -194,10 +238,10 @@ ActFEMtide のインバージョンコード（src/src_inv_joint/ebfem_inv_joint
 
 - Kikai/mesh/ のメッシュファイル（em3d.msh, polygonz.msh, lineinfo.dat, ocean.msh など）
 - Kikai/structure/ の cond_homo.msh（一様 100 Ω·m、初期・参照モデル）と cond_test.msh（真の構造）
-- Kikai/fvxyz/ の vxyz_mesh, fxyz_mesh（潮汐流速と背景磁場）
+- Kikai/fvxyz/ の vxyz_mesh_HAMTIDE（または vxyz_mesh_OTPS）, fxyz_mesh（潮汐流速と背景磁場）
 
-### 6.2 Step 2: 潮汐起源磁場の合成データの作成（Kikai/fwd_tide/） <a id="sec6_2"></a>
-    $cd Kikai/fwd_tide
+### 6.2 Step 2: 潮汐起源磁場の合成データの作成（Kikai/fwd_tide_H/ または Kikai/fwd_tide/） <a id="sec6_2"></a>
+    $cd Kikai/fwd_tide_H      (OTPS の場合は cd Kikai/fwd_tide)
     $./run_fwd.sh           (真の構造 cond_test.msh での順計算。result/P5_S1.dat などが生成される)
     $./generr_tide.sh       (data_inv/P5_tide_amp.dat, P5_tide_pha.dat などが生成される)
 
@@ -216,17 +260,17 @@ inv_mt と inv_joint を実行する場合に必要である。
 ### 6.4 Step 4: インバージョンの実行 <a id="sec6_4"></a>
 潮汐データのみ（ijoint = 1）:
 
-    $cd ../inv_tide
+    $cd ../inv_tide_H         (OTPS の場合は cd ../inv_tide)
     $./run_inv.sh
 
 MT データのみ（ijoint = 2）:
 
-    $cd ../inv_mt
+    $cd ../inv_mt_H           (OTPS の場合は cd ../inv_mt。結果は同じ)
     $./run_inv.sh
 
 潮汐データ + MT データ（ijoint = 3）:
 
-    $cd ../inv_joint
+    $cd ../inv_joint_H        (OTPS の場合は cd ../inv_joint)
     $./run_inv.sh
 
 run_inv.sh は src/src_inv_joint/ をコンパイルし、clean.sh で result_inv/ を空にしてからインバージョンを実行する。例えば inv_joint/run_inv.sh では、実行プログラムに次のように入力している。
@@ -263,6 +307,28 @@ RMS の推移と比抵抗構造の断面は次のように描く。
 
 view_slice.sh の冒頭にある z_elevation, y_slice, x_slice などで、断面の位置と範囲を変更できる。なお、plot_fit_MT.sh, plot_fit_active.sh, plot_rho_pha.sh は ActFEM から引き継いだスクリプトであり、Kikai の観測点名には対応していない。
 
+### 6.6 計算時間の目安 <a id="sec6_6"></a>
+v1.0 のサンプル（Kikai/inv_*/）を、次の計算機（zeus）で実行したときの反復回数と計算時間を示す。
+
+| 項目 | 内容 |
+|:--|:--|
+| CPU | AMD Ryzen Threadripper 9960X（24 コア / 48 スレッド、最大 5.49 GHz） |
+| メモリ | 128 GB（OS から見える容量 125 GiB） |
+| OS | Ubuntu 24.04.4 LTS |
+| コンパイラ・MPI | Intel oneAPI ifx 2026.1.0、Intel MPI 2021.18 |
+| メッシュ（em3d.msh） | 節点 93,720、四面体要素 572,987、辺 668,005 |
+
+| サンプル | 潮汐モデル | データ（個数） | MPI プロセス数 | 収束までの反復回数 | 最終の正規化 RMS | 計算時間 |
+|:--|:--|:--|:-:|:-:|:--|--:|
+| inv_tide_H | HAMTIDE | 潮汐（84） | 1 | 3 | 潮汐 0.988 | 2 分 52 秒 |
+| inv_tide | OTPS | 潮汐（84） | 1 | 6 | 潮汐 0.930 | 5 分 30 秒 |
+| inv_mt_H | （使わない） | MT（560） | 6 | 15 | MT 0.810 | 21 分 26 秒 |
+| inv_mt | （使わない） | MT（560） | 6 | 15 | MT 0.810 | 21 分 38 秒 |
+| inv_joint_H | HAMTIDE | 潮汐（84）+ MT（560） | 6 | 3 | 潮汐 0.958、MT 0.938 | 4 分 37 秒 |
+| inv_joint | OTPS | 潮汐（84）+ MT（560） | 6 | 4 | 潮汐 0.979、MT 0.816 | 6 分 14 秒 |
+
+反復回数は result_inv/rms.dat, rms_mt.dat の最終行の反復番号（初期モデルを 1 回目と数える）、計算時間は run_inv.sh の `time` が出力する経過時間（real）である。潮汐データは 14 観測点 × 1 周波数（M2）× 3 成分（Bx, By, Bz）× 2（振幅・位相）、MT データは 14 観測点 × 5 周波数 × 4 成分 × 2（実部・虚部）である。inv_mt と inv_mt_H は潮汐モデルを使わないため、同じ結果になる。
+
 ## 7 順計算の制御ファイル（tide_fwd.ctl） <a id="Forward_control"></a>
 順計算プログラム（src/solver_mpi/ebfem_bxyz_mpi.exe）は、標準入力から制御ファイルのパスを1つ受け取る（[5.7節](#sec5_7)の run_fwd.sh を参照）。インバージョン（[6章](#Inversion_tutorial)）でも、同じ形式の tide_fwd.ctl を潮汐順計算の設定として読む。読み込みは src/common/m_param.f90 の readparam で行われる。
 
@@ -289,7 +355,7 @@ view_slice.sh の冒頭にある z_elevation, y_slice, x_slice などで、断�
 | local line file | em3d.msh の辺の情報（lineinfo.dat）。 | 使用 | 使用 |
 | Ocean mesh file. | 海洋の三次元メッシュ（ocean.msh）。節点数を vxyz, fxyz ファイルの読み込みに使う。 | 使用 | 使用 |
 | mesh ctl file | メッシュ生成に用いた制御ファイル（mesh.ctl、[付録B](#Appendix_mesh)）。 | ファイルは読まれるが、値は**未使用** | **未使用**（ファイルも読まれない） |
-| Vxyzfile | 海洋メッシュの節点における潮汐流速 $\mathbf{v}$（Kikai/fvxyz/ で作成、[5.6節](#sec5_6)）。 | 使用 | 使用 |
+| Vxyzfile | 海洋メッシュの節点における潮汐流速 $\mathbf{v}$（Kikai/fvxyz/ の mkfvxyz_mesh.sh で作成、[5.6節](#sec5_6)）。ファイル名は使った潮汐モデルを表し、vxyz_mesh_HAMTIDE または vxyz_mesh_OTPS である。 | 使用 | 使用 |
 | Fxyzfile | 海洋メッシュの節点における背景磁場 $\mathbf{F}$（同上）。 | 使用 | 使用 |
 | output folder | 結果の出力フォルダ（例: ./result/）。末尾に "/" を付ける。 | 使用 | **未使用**（joint.ctl の output folder を使う） |
 | header2d, header3d | ActFEM から引き継いだ項目。 | **未使用** | **未使用** |
@@ -375,7 +441,8 @@ ActFEM から引き継いだ電流ダイポール送信源の項目である。�
     Ocean mesh file.   !../mesh/ocean.msh
     ## mesh ctl file: fwd reads the file but its values are not used; inv does not read it 2026.11.26 CC
     mesh ctl file      !../mesh/mesh.ctl
-    Vxyzfile           !../fvxyz/vxyz_mesh
+    ## Vxyzfile: vxyz_mesh_HAMTIDE or vxyz_mesh_OTPS, made by ../fvxyz/mkfvxyz_mesh.sh 2026.11.27 CC
+    Vxyzfile           !../fvxyz/vxyz_mesh_HAMTIDE
     Fxyzfile           !../fvxyz/fxyz_mesh
     ## output folder: used in fwd; inv uses "output folder" in joint.ctl instead 2026.11.26 CC
     output folder      !./result/
@@ -570,10 +637,27 @@ iflag はその成分のデータがあれば 1、なければ 0 である。振
 
 ティッパーはデータと誤差を1つのファイルに書く。generr_tip.sh で作成できる。
 
+## 9 バージョン履歴 <a id="Version_history"></a>
+
+### v1.0（2026年11月） <a id="v1_0"></a>
+最初の正式版。主な内容は次の通りである。
+
+- **順計算とインバージョンのサンプルがそろった。** Kikai/ に、メッシュ生成から順計算までの一連のサンプル（mesh, structure, fvxyz, fwd_tide、[5章](#Forward_tutorial)）と、潮汐起源磁場のみ（inv_tide）、MT のみ（inv_mt）、両方（inv_joint）のインバージョンのサンプル（[6章](#Inversion_tutorial)）がそろった。インバージョンに使う合成データは fwd_tide と fwd_mt で作成する。
+- **gmsh -3 で海面・海底・地表の三角形が細分化されるバグを取り除いた。** これまでは、空気と固体地球の三次元メッシュを作る `gmsh pre3d.geo -3` が、海面・海底・地表の三角形を背景メッシュ（bgmesh3d.pos）に合わせて細分化し、海洋メッシュ（ocean.msh）にない節点を加えていた。そのため em3d.msh は海と空気・固体地球の境界で不整合になり（Kikai では約 5 万の面がつながっていなかった）、辺要素の接線成分の連続性が失われて、海底の磁場がメッシュによって大きく変わっていた。現在は mk3dgeo.exe が pre3d.geo に `Transfinite Line{1:nline} = 2;` と `Transfinite Surface{1:ntriall};` を書き出し、これらの三角形を分割させない（[付録B](#Appendix_mesh)）。v1.0 より前に作成したメッシュとその計算結果は、メッシュを作り直して計算し直すことを推奨する。
+- **潮汐モデル HAMTIDE を使えるようにした。** OTPS/TPXO のデータは作者から提供を受ける必要があるため、無償で入手できる HAMTIDE [(Taguchi et al., 2014)](#Taguchi2014) を既定とした（[5.1節](#sec5_1)）。潮汐流速のファイル名は vxyz_mesh_HAMTIDE / vxyz_mesh_OTPS とし、使ったモデルが分かるようにした。順計算とインバージョンのサンプルは、HAMTIDE 用（fwd_tide_H, inv_tide_H, inv_mt_H, inv_joint_H）と OTPS 用（fwd_tide, inv_tide, inv_mt, inv_joint）に分けた。陸やモデルの範囲外にかかる節点には、どちらのモデルでも最寄りの有効な節点の流速を与える。
+- **潮汐流速の位相の符号の誤りを修正した。** mkvxyzfile.f90 が最初の節点以外で $a\,e^{+iG}$ を用いていたため、各節点の位相の遅れの符号が逆になっていた。$\partial/\partial t = i\omega$ の約束事に合う $a\,e^{-iG}$ に統一した（[付録C](#Appendix_phase)）。v1.0 より前の順計算・インバージョンの結果は、計算し直すことを推奨する。
+- その他の変更
+  - em3d.msh の側面が平面になるように、三次元メッシュの外枠の頂点を二次元メッシュの水平範囲に合わせた（mk3dgeo.exe）。
+  - 潮汐の順計算・インバージョンの Dirichlet 境界条件を、tide_fwd.ctl の lenout, zmax, zmin ではなく、em3d.msh の外縁（xyzminmax）に課すようにした（[7.2節](#sec7_2)）。
+  - tetmeshgen.sh が、エラーの起きたステップで止まるようにした。gmsh -3 には `-setnumber Mesh.AngleToleranceFacetOverlap 0.01` を与える。
+  - 潮汐流速の時間依存の約束事を本マニュアルで $\mathbf{E} = -i\omega\mathbf{A}$（$\partial/\partial t = i\omega$）と正しく記した。
+  - 本マニュアルを再構成し、tide_fwd.ctl の説明（[7章](#Forward_control)）、メッシュ生成の説明（[付録B](#Appendix_mesh)）、本章を加えた。
+
 ## 参考文献 <a id="References"></a>
 - Egbert, G. D., & Erofeeva, S. Y. (2002). Efficient inverse modeling of barotropic ocean tides. Journal of Atmospheric and Oceanic technology, 19(2), 183-204.<a id="EE2002"></a>
 - Minami, T., Utsugi, M., Utada, H., Kagiyama, T., & Inoue, H. (2018). Temporal variation in the resistivity structure of the first Nakadake crater, Aso volcano, Japan, during the magmatic eruptions from November 2014 to May 2015, as inferred by the ACTIVE electromagnetic monitoring system. Earth, Planets and Space, 70(1), 138. <a id="Minami2018"></a>
 - Minami, T., Toh, H., Ichihara, H., & Kawashima, I. (2017). Three‐Dimensional Time Domain Simulation of Tsunami‐Generated Electromagnetic Fields: Application to the 2011 Tohoku Earthquake Tsunami. Journal of Geophysical Research: Solid Earth, 122(12), 9559-9579. <a id="Minami2017"></a>
+- Taguchi, E., Stammer, D., & Zahel, W. (2014). Inferring deep ocean tidal energy dissipation from the global high-resolution data-assimilative HAMTIDE model. Journal of Geophysical Research: Oceans, 119, 4573-4592. https://doi.org/10.1002/2013JC009766 <a id="Taguchi2014"></a>
 - Oishi, Y., Piggott, M. D., Maeda, T., Kramer, S. C., Collins, G. S., Tsushima, H., & Furumura, T. (2013). Three‐dimensional tsunami propagation simulations using an unstructured mesh finite element model. Journal of Geophysical Research: Solid Earth, 118(6), 2998-3018.<a id="O2013"></a>
 - 本間利久・五十嵐一・川口秀樹 (2002). 数値電磁力学：基礎と応用（日本シミュレーション学会 編）. 森北出版, 251 pp. ISBN 4-627-71641-9（2021年版: ISBN 978-4-627-71649-0）. https://www.morikita.co.jp/books/mid/071641 <a id="Honma2002"></a>
 
@@ -666,7 +750,7 @@ $$\sum_{j=1}^{6}\left\{ \left\lbrack M_e' \right\rbrack_{ij} + L^2 i\omega\mu\si
 $$L^2 \times 10^{6} \times 10^{-9} = 10^{6}\,[\mathrm{m^2/km^2}] \times 10^{6}\,[(\mathrm{mV/km})/(\mathrm{V/m})] \times 10^{-9}\,[(\mathrm{V/m})/(\mathrm{nV/m})] = 10^{3}$$
 
 ### A.5 電場・磁場・電流の計算 <a id="secA_5"></a>
-連立方程式を解いて $\left\lbrack Al \right\rbrack$ が求まった後、観測点を含む要素内で式(A.3)により $\mathbf{A}$ を補間し、電場を $\mathbf{E} = i\omega\mathbf{A}$、磁場を $\mathbf{B} = \nabla\times\mathbf{A}$ から求める。
+連立方程式を解いて $\left\lbrack Al \right\rbrack$ が求まった後、観測点を含む要素内で式(A.3)により $\mathbf{A}$ を補間し、電場を $\mathbf{E} = -i\omega\mathbf{A}$、磁場を $\mathbf{B} = \nabla\times\mathbf{A}$ から求める。
 
 海洋中の電流には、誘導電場 $\mathbf{E}$ による寄与と起電力 $\mathbf{v}\times\mathbf{F}$ による寄与の両方が含まれる（[4章](#Governing_equation)のオームの法則）。plot_ixyh.sh で描く水平電流（深さ積分）は、水深 $h$ を用いて
 
@@ -793,3 +877,41 @@ Kikai/mesh/tetmeshgen.sh では、空気と固体地球の三次元メッシュ�
 - 直方体の外側: sizeout [km]
 
 背景メッシュの格子は、計算領域の境界、z = upzin, downzin の面、観測点の周りに置かれる。Kikai/mesh/mesh.ctl では upzin = 20 km、downzin = -60 km、sizein3d = 20 km としている。
+
+## 付録C 潮汐モデル（OTPS・HAMTIDE）と ActFEMtide の位相の扱い <a id="Appendix_phase"></a>
+潮汐流速 $\mathbf{v}$ は、潮汐モデルの振幅と位相から ActFEMtide の複素振幅に変換して与える。この変換では、潮汐モデルと ActFEMtide とで時間依存の約束事と位相の定義が異なるため、注意が必要である。
+
+### C.1 ActFEMtide の約束事 <a id="secC_1"></a>
+ActFEMtide（および ActFEM, [Minami et al. 2018](#Minami2018)）は時間依存を $e^{i\omega t}$ とし、$\partial/\partial t = i\omega$ を仮定する。すべての場は複素振幅 $X$ を用いて
+
+$$X(t) = \mathrm{Re}\left[ X\,e^{i\omega t} \right] \cdot \cdot \cdot (C.1)$$
+
+と表され、電場は $\mathbf{E} = -\partial\mathbf{A}/\partial t = -i\omega\mathbf{A}$ である（[4章](#Governing_equation)）。
+
+出力される位相 $\theta$ は複素振幅の偏角 $\theta = \arg(X)$ [deg] であり（例: P5_S1.dat の各成分の位相）、時間変化は $X(t) = |X|\cos(\omega t + \theta)$ である。したがって $\theta$ は位相の「進み」であり、潮汐モデルと同じ「位相の遅れ」に直すと $-\theta$ になる。
+
+### C.2 潮汐モデルの位相（グリニッジ位相の遅れ） <a id="secC_2"></a>
+OTPS（TPXO, [Egbert and Erofeeva 2002](#EE2002)）と HAMTIDE（[Taguchi et al. 2014](#Taguchi2014)）は、どちらも流速の振幅 $a$ [cm/s] とグリニッジ位相の遅れ $G$ [deg] を出力し、流速の時間変化は
+
+$$v(t) = a\cos\left(\omega t + V_0 - G\right) \cdot \cdot \cdot (C.2)$$
+
+である（$V_0$ は天文引数で、すべての節点に共通）。ただし、複素数での表し方は両者で逆である。
+
+| モデル | 複素数の定義 | 振幅・位相との関係 |
+|:--|:--|:--|
+| OTPS | $h(t) = \mathrm{Re}[\,h\,e^{i(\omega t + V_0)}]$（README） | $h = a\,e^{-iG}$、$G = \arctan(-\mathrm{Im}\,h/\mathrm{Re}\,h)$（extract_HC.f90） |
+| HAMTIDE | RE $= a\cos G$、IM $= a\sin G$ | RE $+ i$ IM $= a\,e^{+iG}$ |
+
+ActFEMtide では両者の複素数（RE/IM）は使わず、振幅 $a$ と位相 $G$（OTPS の AP 出力、HAMTIDE の UAMP/UPHA, VAMP/VPHA）だけを用いる。両モデルの $G$ は同じ意味をもつ。Kikai のメッシュの節点で M2 流速を比べると、位相差の中央値は 1° 未満であった。
+
+### C.3 ActFEMtide での複素振幅 <a id="secC_3"></a>
+式(C.2) を式(C.1) の形で表すと（$V_0$ は共通なので省く）、ActFEMtide で用いる流速の複素振幅は
+
+$$v = a\,e^{-iG} \cdot \cdot \cdot (C.3)$$
+
+であり、OTPS の複素調和定数 $h$ と一致する。mkfvxyz/src/mkvxyzfile.f90 は、u_xyz_mesh, v_xyz_mesh の振幅 [cm/s] と位相 $G$ [deg] から式(C.3) を計算し、m/s に換算して vxyz_mesh に書き出す。
+
+v1.0 より前の mkvxyzfile.f90 は、最初の節点だけ式(C.3) を用い、2番目以降の節点では $a\,e^{+iG}$ を用いていた。この場合、流速は $a\cos(\omega t + G)$ となり、各節点の位相の遅れ $G$ の符号が逆になる（振幅と流速の向きは変わらないが、潮汐の位相の空間分布が反転し、潮汐波の伝わる向きや潮流楕円の回る向きが逆になる）。v1.0 で修正した（[9章](#Version_history)）。
+
+### C.4 陸・モデル範囲外の節点 <a id="secC_4"></a>
+海洋メッシュの節点が潮汐モデルの陸の格子やモデルの範囲外にかかる場合（主に海岸付近）、OTPS は "Site is out of model grid OR land" を出力し、HAMTIDE の補間値も欠損になる。mkfvxyz_mesh.sh は、どちらのモデルでも、これらの節点に最寄りの有効な節点の振幅と位相を与える（mkfvxyz/src/fill_nearest_uv.py。元のファイルは u_xyz_mesh.raw, v_xyz_mesh.raw として残る）。HAMTIDE の補間は、位相の 0°/360° のまたぎを避けるため、$a\cos G$ と $a\sin G$ を双線形補間してから振幅と位相に戻している（mkfvxyz/src/hamtide2uv.py）。

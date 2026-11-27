@@ -46,16 +46,21 @@ do i=1,nobs
   bxa_err = ratio*bxa
   bya_err = ratio*bya
   bza_err = ratio*bza
-  exp_err = ratio*exp
+!  exp_err = ratio*exp ! commented out 2026.11.27 CC (exp is the phase of Ex)
+  exa_err = ratio*exa  ! 2026.11.27 CC
   eya_err = ratio*eya
-  exp_err = ratio*exp
-  bxp_err = atan2(bxa*ratio, bxa)*r2d 
-  byp_err = atan2(bya*ratio, bya)*r2d 
+!  exp_err = ratio*exp ! commented out 2026.11.27 CC
+  bxp_err = atan2(bxa*ratio, bxa)*r2d
+  byp_err = atan2(bya*ratio, bya)*r2d
   bzp_err = atan2(bza*ratio, bza)*r2d
-  exp_err = atan2(exp*ratio, exp)*r2d 
-  eyp_err = atan2(eya*ratio, eya)*r2d 
-  write(20,'(g15.7,a,10g15.7)') freq," 1 1 1 1 1 ",bxa,bya,bza,eya,eya,bxa_err,bya_err,bza_err,eya_err,eya_err 
-  write(21,'(g15.7,1x,10g15.7)') freq," 1 1 1 1 1",bxp,byp,bzp,exp,eyp,bxp_err,byp_err,bzp_err,exp_err,eyp_err
+!  exp_err = atan2(exp*ratio, exp)*r2d ! commented out 2026.11.27 CC (used the phase instead of the amplitude)
+  exp_err = atan2(exa*ratio, exa)*r2d  ! 2026.11.27 CC
+  eyp_err = atan2(eya*ratio, eya)*r2d
+!  write(20,'(g15.7,a,10g15.7)') freq," 1 1 1 1 1 ",bxa,bya,bza,eya,eya,bxa_err,bya_err,bza_err,eya_err,eya_err ! commented out 2026.11.27 CC
+!  write(21,'(g15.7,1x,10g15.7)') freq," 1 1 1 1 1",bxp,byp,bzp,exp,eyp,bxp_err,byp_err,bzp_err,exp_err,eyp_err ! commented out 2026.11.27 CC
+  ! Ex amplitude was replaced by Ey, and the phase line was wrapped after 10 items 2026.11.27 CC
+  write(20,'(g15.7,a,10g15.7)') freq," 1 1 1 1 1 ",bxa,bya,bza,exa,eya,bxa_err,bya_err,bza_err,exa_err,eya_err ! 2026.11.27 CC
+  write(21,'(g15.7,a,10g15.7)') freq," 1 1 1 1 1 ",bxp,byp,bzp,exp,eyp,bxp_err,byp_err,bzp_err,exp_err,eyp_err ! 2026.11.27 CC
  end do
  close(10)
  close(20)

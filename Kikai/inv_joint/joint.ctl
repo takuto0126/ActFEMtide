@@ -35,11 +35,12 @@ P10 amp data       !   6 ../fwd_tide/data_inv/P10_tide_amp.dat
 P11 amp data       !   7 ../fwd_tide/data_inv/P11_tide_amp.dat
 P12 amp data       !   8 ../fwd_tide/data_inv/P12_tide_amp.dat
 P13 amp data       !   9 ../fwd_tide/data_inv/P13_tide_amp.dat
-P14 amp data       !  10 ../fwd_tide/data_inv/P13_tide_amp.dat
-P15 amp data       !  11 ../fwd_tide/data_inv/P13_tide_amp.dat
-P16 amp data       !  12 ../fwd_tide/data_inv/P13_tide_amp.dat
-P17 amp data       !  13 ../fwd_tide/data_inv/P13_tide_amp.dat
-P18 amp data       !  14 ../fwd_tide/data_inv/P13_tide_amp.dat
+## P14-P18 amp data pointed to P13_tide_amp.dat; corrected to each site 2026.11.27 CC
+P14 amp data       !  10 ../fwd_tide/data_inv/P14_tide_amp.dat
+P15 amp data       !  11 ../fwd_tide/data_inv/P15_tide_amp.dat
+P16 amp data       !  12 ../fwd_tide/data_inv/P16_tide_amp.dat
+P17 amp data       !  13 ../fwd_tide/data_inv/P17_tide_amp.dat
+P18 amp data       !  14 ../fwd_tide/data_inv/P18_tide_amp.dat
 ## phase
 P5  pha data       !   1 ../fwd_tide/data_inv/P5_tide_pha.dat
 P6  pha data       !   2 ../fwd_tide/data_inv/P6_tide_pha.dat

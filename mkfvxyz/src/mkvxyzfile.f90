@@ -66,7 +66,8 @@ pi=3.1415926535
 
         read(11,*,err=98)lat3,lon3,uamp,uphase
         read(12,*,err=99)lat3,lon3,vamp,vphase
-
+         uphase=-1*uphase ! A*exp(-iG) for d/dt = i*omega, same as the 1st node 2026.11.27 CC
+         vphase=-1*vphase ! (G: Greenwich phase lag of OTPS/HAMTIDE)           2026.11.27 CC
          xyz(1)=uamp*(cos(uphase*pi/180)+inum*sin(uphase*pi/180))
          xyz(2)=vamp*(cos(vphase*pi/180)+inum*sin(vphase*pi/180))
 
